@@ -1,0 +1,4 @@
+# VRM モデルはライセンスの都合でリポジトリに入れない（各自で assets/Model/ に置く）
+*.vrm
+assets/Model/*
+!assets/Model/.gitkeep

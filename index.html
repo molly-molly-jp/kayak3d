@@ -1,0 +1,3129 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>3D KAYAK RIVER RUSH — 白波カヤック下り</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a1c26;
+    font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+    -webkit-user-select: none; user-select: none; touch-action: none; }
+  #app { position: fixed; inset: 0; }
+  canvas { display: block; }
+
+  /* ---------------- HUD ---------------- */
+  .hud { position: fixed; z-index: 10; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.6); pointer-events: none; }
+  .label { font-size: 11px; letter-spacing: .24em; opacity: .8; font-weight: 700; }
+  .value { font-size: 40px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.05; }
+
+  #hud-tl { top: 16px; left: 22px; }
+  #hud-tl .value { color: #ffe27a; }
+  #combo { margin-top: 6px; font-size: 15px; font-weight: 800; letter-spacing: .1em; color: #7ff0ff; opacity: 0; transition: opacity .15s; }
+  #combo.on { opacity: 1; }
+
+  #hud-tr { top: 16px; right: 22px; text-align: right; }
+  #hud-tr .value { font-size: 26px; }
+  #hud-tr .value small { font-size: 13px; opacity: .75; }
+  #gates { margin-top: 4px; font-size: 12px; letter-spacing: .16em; font-weight: 700; opacity: .82; }
+
+  #hud-top { top: 14px; left: 50%; transform: translateX(-50%); width: min(44vw, 440px); }
+  #prog { position: relative; height: 8px; background: rgba(255,255,255,.18); border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+  #prog-fill { position: absolute; inset: 0 auto 0 0; width: 0%; border-radius: 4px;
+    background: linear-gradient(90deg,#4fd8ff,#ffe14d); box-shadow: 0 0 10px rgba(120,220,255,.5); }
+  #prog-icon { position: absolute; top: -14px; left: 0%; transform: translateX(-50%); font-size: 20px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.6)); }
+  #hud-top .cap { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: .18em;
+    opacity: .78; margin-top: 6px; font-weight: 700; }
+  #hud-top .cap b { color: #ffe14d; }
+
+  /* スピードメーター */
+  #spd { position: fixed; z-index: 10; right: 22px; bottom: 46px; width: 130px; text-align: right;
+    color: #fff; pointer-events: none; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+  #spd .bar { height: 6px; background: rgba(255,255,255,.18); border-radius: 3px; overflow: hidden; margin-top: 5px; }
+  #spd .bar > div { height: 100%; width: 40%; background: linear-gradient(90deg,#8fe3ff,#4f8cff); border-radius: 3px; }
+  #spd .v { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .cur { margin-top: 12px; }
+  .cur .cl { font-size: 9px; letter-spacing: .2em; opacity: .72; display: block; margin-bottom: 4px; font-weight: 700; }
+  .cbar { position: relative; width: 130px; height: 9px; margin-left: auto;
+    background: rgba(255,255,255,.14); border-radius: 5px; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+  .cbar::before { content: ''; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px;
+    background: rgba(255,255,255,.55); }
+  #curdot { position: absolute; top: 50%; left: 50%; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px;
+    border-radius: 50%; background: #7ff0ff; box-shadow: 0 0 10px rgba(120,240,255,.9); transition: background .2s; }
+
+  /* ---------------- popups ---------------- */
+  #popups { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+  .popup { position: absolute; left: 50%; top: 40%; transform: translate(-50%,-50%);
+    font-size: 32px; font-weight: 900; color: #ffe14d; white-space: nowrap;
+    text-shadow: 0 0 16px rgba(255,220,60,.85), 0 3px 6px rgba(0,0,0,.6);
+    animation: popfloat 1.0s cubic-bezier(.2,.8,.3,1) forwards; }
+  .popup small { display: block; text-align: center; font-size: 15px; font-weight: 800; opacity: .95; margin-top: 2px; }
+  .popup.bad { color: #ff7a6b; text-shadow: 0 0 16px rgba(255,70,70,.85), 0 3px 6px rgba(0,0,0,.6); }
+  .popup.miss { color: #d6e2ea; font-size: 22px; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+  .popup.big { font-size: 52px; }
+  @keyframes popfloat {
+    0%   { opacity: 0; transform: translate(-50%,-50%) translateY(22px) scale(.55); }
+    16%  { opacity: 1; transform: translate(-50%,-50%) translateY(0) scale(1.14); }
+    32%  { transform: translate(-50%,-50%) translateY(5px) scale(1); }
+    100% { opacity: 0; transform: translate(-50%,-50%) translateY(-60px) scale(1); }
+  }
+
+  /* ---------------- overlays ---------------- */
+  .overlay { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column;
+    align-items: center; justify-content: safe center; gap: 10px; overflow-y: auto;
+    background: radial-gradient(ellipse at 50% 40%, rgba(8,32,48,.62), rgba(4,14,22,.92));
+    backdrop-filter: blur(3px); color: #fff; text-align: center; padding: 16px 20px;
+    scrollbar-width: none; }
+  .overlay::-webkit-scrollbar { display: none; }
+  /* タイトル画面：生成したキービジュアルを背景に */
+  #title { background-image:
+      linear-gradient(180deg, rgba(4,14,22,.42) 0%, rgba(4,14,22,.62) 45%, rgba(4,14,22,.93) 100%),
+      url("assets/title_hero.jpg");
+    background-size: cover; background-position: center 42%; backdrop-filter: none; }
+  #title h1 { font-size: clamp(32px, 5.8vw, 62px); }
+  .overlay.hidden { display: none; }
+  .hidden { display: none !important; }
+  .overlay h1 { font-size: clamp(30px, 6vw, 62px); font-weight: 900; letter-spacing: .04em; line-height: 1.05;
+    background: linear-gradient(180deg,#ffffff,#7fd8ff 60%,#2ea9d8);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,.6)); }
+  .overlay .sub { font-size: 14px; letter-spacing: .3em; opacity: .78; font-weight: 700; }
+  .overlay .desc { font-size: 14px; line-height: 1.75; opacity: .85; max-width: 560px; }
+  /* スタートボタンの下に出した紹介文 */
+  .desc.below { margin-top: 2px; padding-top: 11px; border-top: 1px solid rgba(255,255,255,.14); }
+
+  /* 操作方法。初めての人にも最初に読ませたいので、タイトル直下に大きめに出す */
+  .keywrap { display: flex; flex-direction: column; align-items: center; gap: 9px;
+    background: rgba(6,22,34,.45); border: 1px solid rgba(255,255,255,.22); border-radius: 14px;
+    padding: 11px 24px 13px; }
+  .keylab { font-size: 10px; letter-spacing: .34em; font-weight: 800; color: #9fe0ff; }
+  .keys { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 20px; font-size: 14px; }
+  .kitem { display: inline-flex; align-items: center; gap: 8px; }
+  .keys b { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.4); border-radius: 7px;
+    padding: 4px 12px; font-weight: 800; letter-spacing: .05em; box-shadow: 0 2px 0 rgba(0,0,0,.28); }
+  .keys2 { font-size: 11px; opacity: .72; letter-spacing: .05em; }
+  .keys2 b { background: rgba(255,255,255,.12); border-radius: 5px; padding: 2px 7px; font-weight: 700; }
+
+  /* 視点説明 */
+  .camwrap { display: flex; flex-direction: column; align-items: center; gap: 7px; margin-top: 4px; }
+  .camlab { font-size: 10px; letter-spacing: .3em; opacity: .6; font-weight: 700; }
+  .camrow { display: flex; align-items: center; gap: 7px; font-size: 12px; letter-spacing: .06em; }
+  .camrow i { font-style: normal; width: 15px; height: 15px; border-radius: 50%; flex: 0 0 auto;
+    box-shadow: 0 0 9px currentColor; background: currentColor; }
+  .c1 { color: #7fd8ff; } .c2 { color: #ffe14d; } .c3 { color: #9cf0a8; }
+  .camarrow { opacity: .5; font-size: 11px; }
+  .camnote { font-size: 11px; opacity: .68; letter-spacing: .06em; max-width: 460px; line-height: 1.6; }
+
+  /* 言語切り替え（日本語 / English） */
+  .langsel { position: absolute; top: 14px; right: 16px; display: flex; gap: 4px; z-index: 3; }
+  .langsel button { font-family: inherit; font-size: 11px; font-weight: 700; letter-spacing: .1em;
+    color: #9fc4d8; background: rgba(10,28,42,.55); border: 1px solid rgba(255,255,255,.22);
+    border-radius: 999px; padding: 5px 12px; cursor: pointer; transition: background .15s, color .15s; }
+  .langsel button:hover { background: rgba(255,255,255,.16); color: #fff; }
+  .langsel button.on { color: #06222f; background: linear-gradient(180deg,#8fe8ff,#31b6e0); border-color: transparent; }
+  .btn { margin-top: 6px; padding: 13px 34px; font-size: 16px; font-weight: 800; letter-spacing: .12em;
+    color: #06222f; background: linear-gradient(180deg,#8fe8ff,#31b6e0); border: 0; border-radius: 999px;
+    cursor: pointer; box-shadow: 0 6px 20px rgba(30,160,210,.4); font-family: inherit;
+    transition: transform .12s, box-shadow .12s; }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(30,160,210,.55); }
+  .btn:active { transform: translateY(1px); }
+  /* メインのボタンに付随するサブのボタン（タイトルへ戻る など） */
+  .btn2 { margin-top: 2px; padding: 9px 22px; font-size: 12px; font-weight: 700; letter-spacing: .1em;
+    color: #cfe8f2; background: transparent; border: 1px solid rgba(255,255,255,.3); border-radius: 999px;
+    cursor: pointer; font-family: inherit; transition: background .15s, border-color .15s, color .15s; }
+  .btn2:hover { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.6); color: #fff; }
+  .tip { font-size: 12px; opacity: .55; letter-spacing: .1em; }
+
+  /* 難易度選択 */
+  .diffwrap { display: flex; flex-direction: column; align-items: center; gap: 7px; margin-top: 6px; }
+  .difflab { font-size: 10px; letter-spacing: .3em; opacity: .6; font-weight: 700; }
+  .diffsel { display: flex; gap: 6px; background: rgba(255,255,255,.1); padding: 5px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.18); }
+  .diffsel button { font-family: inherit; font-size: 12px; font-weight: 800; letter-spacing: .14em;
+    color: #cfe8f2; background: transparent; border: 0; padding: 7px 18px; border-radius: 999px; cursor: pointer;
+    transition: background .15s, color .15s; }
+  .diffsel button:hover { background: rgba(255,255,255,.14); }
+  .diffsel button.on { color: #06222f; background: linear-gradient(180deg,#8fe8ff,#31b6e0); }
+  .diffnote { font-size: 11px; opacity: .68; letter-spacing: .06em; }
+
+  .rank { font-size: 15px; letter-spacing: .3em; font-weight: 700; opacity: .85; }
+  .rank span { font-size: 64px; font-weight: 900; letter-spacing: 0; vertical-align: -8px; margin-left: 10px;
+    color: #ffe14d; text-shadow: 0 0 26px rgba(255,210,70,.6); }
+  .result-score { font-size: 46px; font-weight: 900; font-variant-numeric: tabular-nums; color: #8ff0ff; }
+  .result-detail { font-size: 14px; line-height: 2; opacity: .9; }
+  .result-detail b { color: #ffe14d; }
+
+  #countdown { position: fixed; inset: 0; z-index: 25; display: flex; align-items: center; justify-content: center;
+    font-size: 130px; font-weight: 900; color: #fff; text-shadow: 0 0 40px rgba(120,220,255,.8); pointer-events: none; }
+
+  .hint-bottom { position: fixed; z-index: 10; bottom: 14px; left: 50%; transform: translateX(-50%);
+    color: rgba(255,255,255,.62); font-size: 11px; letter-spacing: .16em; pointer-events: none; }
+
+  /* ダメージ時のビネット */
+  #vig { position: fixed; inset: 0; z-index: 12; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse at 50% 50%, rgba(255,0,0,0) 42%, rgba(220,20,20,.55) 100%);
+    transition: opacity .18s; }
+
+  /* タッチ操作 */
+  #touch { position: fixed; inset: 0; z-index: 15; display: none; }
+  #touch.on { display: block; }
+  .tbtn { position: absolute; bottom: 26px; width: 78px; height: 78px; border-radius: 50%;
+    background: rgba(255,255,255,.14); border: 2px solid rgba(255,255,255,.34); color: #fff;
+    font-size: 26px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(2px); }
+  #t-l { left: 22px; } #t-r { left: 116px; } #t-f { right: 22px; width: 96px; background: rgba(90,210,255,.24); }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<div class="hud" id="hud-tl">
+  <div class="label">SCORE</div>
+  <div class="value" id="score">0</div>
+  <div id="combo">COMBO ×1</div>
+</div>
+
+<div class="hud" id="hud-tr">
+  <div class="label">TIME</div>
+  <div class="value"><span id="time">0.0</span><small>s</small></div>
+  <div id="gates">GATE 0 / 0</div>
+</div>
+
+<div class="hud" id="hud-top">
+  <div id="prog"><div id="prog-fill"></div><div id="prog-icon">🛶</div></div>
+  <div class="cap"><span>DROP</span><span>GOAL <b id="remain">1460</b>m</span></div>
+</div>
+
+<div id="spd">
+  <div class="label">FLOW</div>
+  <div class="v"><span id="spdv">0</span><small> km/h</small></div>
+  <div class="bar"><div id="spdbar"></div></div>
+  <div class="cur">
+    <span class="cl">CURRENT → 押される向き</span>
+    <div class="cbar"><i id="curdot"></i></div>
+  </div>
+</div>
+
+<div id="vig"></div>
+<div id="popups"></div>
+<div id="countdown" class="hidden"></div>
+
+<div class="hint-bottom" data-en="A / D paddle ・ W forward paddle ・ R restart ・ C view (3rd → 1st → front) ・ M mute">A / D 漕ぐ ・ W 前進漕ぎ ・ R リスタート ・ C 視点（3人称→一人称→正面） ・ M ミュート</div>
+
+<div class="overlay" id="title">
+  <div class="langsel">
+    <button data-lang="ja" class="on">日本語</button>
+    <button data-lang="en">EN</button>
+  </div>
+  <h1>KAYAK RIVER RUSH</h1>
+  <div class="keywrap">
+    <span class="keylab" data-en="CONTROLS &mdash; How to play">CONTROLS — 操作方法</span>
+    <div class="keys">
+      <span class="kitem"><b>A / ←</b><span data-en="Paddle left">左へ漕ぐ</span></span>
+      <span class="kitem"><b>D / →</b><span data-en="Paddle right">右へ漕ぐ</span></span>
+      <span class="kitem"><b>W / ↑</b><span data-en="Forward paddle (speed up)">前進漕ぎ（加速）</span></span>
+    </div>
+    <div class="keys2" data-en="<b>SPACE</b> Start / Retry &nbsp; <b>C</b> Change view &nbsp; <b>R</b> Restart &nbsp; <b>M</b> Mute">
+      <b>SPACE</b> スタート／もう一度　<b>C</b> 視点切替　<b>R</b> リスタート　<b>M</b> ミュート
+    </div>
+  </div>
+  <div class="camwrap">
+    <span class="camlab" data-en="VIEW &mdash; press C to switch">VIEW — C キーで切替</span>
+    <div class="camrow">
+      <i class="c1"></i><span data-en="3rd person (chase)">3人称（チェイス）</span>
+      <span class="camarrow">→</span>
+      <i class="c2"></i><span data-en="1st person (POV)">一人称（POV）</span>
+      <span class="camarrow">→</span>
+<i class="c3"></i><span data-en="Front view">正面</span>
+    </div>
+  </div>
+  <div class="diffwrap">
+    <span class="difflab">DIFFICULTY</span>
+    <div class="diffsel" id="diffsel">
+      <button data-d="easy">EASY</button>
+      <button data-d="normal" class="on">NORMAL</button>
+      <button data-d="hard">HARD</button>
+    </div>
+    <div class="diffnote" id="diffnote">NORMAL：押し流されるぶんを櫂で打ち消す</div>
+  </div>
+  <div style="margin:14px 0 6px;display:flex;flex-direction:column;align-items:center;gap:6px">
+    <span style="font-size:11px;letter-spacing:.18em;color:#7fb8d8">AVATAR</span>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center">
+      <select id="vrm-sel" style="background:#0d2233;color:#cfe;border:1px solid #2f5f7a;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;min-width:230px"></select>
+      <button id="vrm-prev" style="background:#0d2233;color:#cfe;border:1px solid #2f5f7a;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit" title="前のアバター">◀</button>
+      <button id="vrm-next" style="background:#0d2233;color:#cfe;border:1px solid #2f5f7a;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit" title="次のアバター">▶</button>
+      <button id="vrm-file" style="background:#0d2233;color:#cfe;border:1px solid #2f5f7a;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit" data-en="File...">ファイル…</button>
+      <input type="file" id="vrm-input" accept=".vrm" hidden>
+    </div>
+    <div id="vrm-note" style="font-size:13px;color:#ffe14d;font-weight:700;letter-spacing:.02em;max-width:560px;line-height:1.6" data-en="Load your own VRM avatar with the &quot;File...&quot; button (browser only)">手持ちの VRM アバターは「ファイル…」から読み込めます（ブラウザー内のみ）</div>
+  </div>
+  <button class="btn" id="start-btn" data-en="START (SPACE)">スタート（SPACE）</button>
+  <div class="desc below" data-en="Dive down the rapids.<br>
+The river pushes you to the outside of every bend. <b style='color:#7fd8ff'>Use your paddle to hold your line.</b><br>
+<span style='color:#ffe14d'>&#9650; pass between the flags</span> to score / <span style='color:#ff9a8b'>rocks</span> knock you off course.<br>
+At the end of the river there is a jetty waiting.">
+    急流に乗って下れ。<br>
+    川はカーブするたびに船を外側へ押す。<b style="color:#7fd8ff">カヤックのノリで流れに逆らえ。</b><br>
+    <span style="color:#ffe14d">▲ 旗のあいだ</span> を通ると得点 / <span style="color:#ff9a8b">岩</span> にぶつかると弾かれて減点。<br>
+    下りきった先に待っているのがゴールの桟橋。
+  </div>
+</div>
+
+<div class="overlay hidden" id="result">
+  <div class="langsel">
+    <button data-lang="ja" class="on">日本語</button>
+    <button data-lang="en">EN</button>
+  </div>
+  <div class="sub">GOAL !!</div>
+  <h1 id="result-title">着いた！</h1>
+  <div class="rank">RANK <span id="result-rank">A</span></div>
+  <div class="result-score" id="result-score">0</div>
+  <div class="result-detail" id="result-detail"></div>
+  <button class="btn" id="retry-btn" data-en="PLAY AGAIN (SPACE)">もう一度（SPACE）</button>
+  <button class="btn2" id="to-title-btn" data-en="Back to title screen">タイトル画面に戻る</button>
+</div>
+
+<div id="touch">
+  <div class="tbtn" id="t-l">◀</div>
+  <div class="tbtn" id="t-r">▶</div>
+  <div class="tbtn" id="t-f">漕ぐ</div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.5.5/lib/three-vrm.module.min.js"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+/* =========================================================================
+   0. ユーティリティ
+   ========================================================================= */
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (a, b) => a + Math.random() * (b - a);
+const smoothstep = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+const damp = (cur, target, k, dt) => lerp(cur, target, 1 - Math.pow(k, dt)); // k = 1秒あたりの残存率
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rng = mulberry32(20240711);
+
+/* =========================================================================
+   1. 設定
+   ========================================================================= */
+const CFG = {
+  LENGTH: 1500,          // 川を下る距離(m)
+  startZ: 20,            // 出発地点の z（流れは -Z 方向）
+  goalZ: -1440,          // ゴール（桟橋）の z
+  halfW: 10.5,           // 川幅の基準（半分）
+  totalDrop: 30,         // スタートからゴールまでの累積落差(m)
+  kayakR: 0.72,          // カヤックの当たり半径
+  speedBase: 11.5,       // 基本流速 m/s
+  speedGain: 7.5,        // 下るほど増す流速
+  speedMax: 26,
+  strokeLat: 5.6,        // 1櫂あたりの横推進（櫂をゆっくりにしたぶん持ち分をUP）
+  strokeFwd: 0.85,       // 1櫂あたりの前進加速
+  strokeRate: 1.35,      // 1秒あたりの櫂サイクル数（0.74秒/櫂）
+  strokeRateFwd: 0.95,   // 前進漕ぎは片側が半サイクル
+  strokeWin: 0.34,       // 推力のかかるフェーズ幅（キャッチ後〜抜け）
+  strokeLag: 0.07,       // キーを押してから櫂が動き出すまでの遅れ
+  dragLat: 1.45,         // 横方向の水抵抗
+  curvK: 0.42,           // カーブで押し出される強さ
+  eddyK: 0.40,           // 乱流
+  rockRScale: 0.82,      // 岩の当たり半径の倍率（難易度で変動）
+  PTS: { gate: 120, perfect: 240, rock: -120 },
+};
+
+/* =========================================================================
+   2. 川の形状（中心線 x = cx(z)、幅 = halfW(z)）
+   ========================================================================= */
+function cx(z)   { return 38 * Math.sin(z * 0.01180) + 10 * Math.sin(z * 0.02500 + 1.3) + 2.5 * Math.sin(z * 0.05500 + 0.5); }
+function cx1(z)  { return 38 * 0.01180 * Math.cos(z * 0.01180) + 10 * 0.02500 * Math.cos(z * 0.02500 + 1.3) + 2.5 * 0.05500 * Math.cos(z * 0.05500 + 0.5); }
+function cx2(z)  { return -38 * 0.01180 * 0.01180 * Math.sin(z * 0.01180) - 10 * 0.02500 * 0.02500 * Math.sin(z * 0.02500 + 1.3) - 2.5 * 0.05500 * 0.05500 * Math.sin(z * 0.05500 + 0.5); }
+function halfW(z){ return CFG.halfW + 2.8 * Math.sin(z * 0.0043 + 2.1) + 1.4 * Math.sin(z * 0.0110); }
+
+// 水面の高さ。川は一定勾配で下っており、途中 2 か所に小さな段差（滝）がある。
+//   drop  … 落差（m）と落ちる距離（m）。小さいほど急崖
+//   swell … lip の手前に作る「せり上がり」。艇が爬起来てから落ちるので
+//           「ジャンプ」ではなく「段差を落ちる」ことがすぐわかる
+const DROPS = [{ z: -455, h: 2.0, w: 5.0, swell: 0.60, swellLen: 9 }, { z: -1010, h: 2.5, w: 5.5, swell: 0.72, swellLen: 10 }];
+function riverY(z) {
+  const t = clamp((CFG.startZ - z) / (CFG.startZ - CFG.goalZ), 0, 1);
+  let y = -t * CFG.totalDrop;                       // 全体の緩やかな下り
+  for (const d of DROPS) {                          // 段差（滑らかに落ちる）
+    const u = clamp((d.z - z) / d.w, 0, 1);
+    y -= d.h * u * u * (3 - 2 * u);
+    // 手前のせり上がり：z は下流ほど小さくなるので、d.z から下流側是最小・上流で最大
+    const s = clamp((d.z + d.swellLen - z) / d.swellLen, 0, 1);
+    y += d.swell * s * s * (3 - 2 * s);
+  }
+  return y;
+}
+
+// 簡易ノイズ（地形用）
+function hash2(i, j) {
+  let n = Math.imul(i | 0, 374761393) + Math.imul(j | 0, 668265263);
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+  n ^= n >>> 16;
+  return (n >>> 0) / 4294967295;
+}
+function vnoise(x, z) {
+  const xi = Math.floor(x), zi = Math.floor(z), xf = x - xi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf);
+  const a = hash2(xi, zi), b = hash2(xi + 1, zi), c = hash2(xi, zi + 1), d = hash2(xi + 1, zi + 1);
+  return (a + (b - a) * u) * (1 - v) + (c + (d - c) * u) * v - 0.5;
+}
+
+/* =========================================================================
+   3. レンダラ / シーン / ライト
+   ========================================================================= */
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const HAZE = new THREE.Color(0xbfe0ee);
+scene.background = HAZE.clone();
+scene.fog = new THREE.Fog(HAZE, 60, 340);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.3, 2200);
+
+scene.add(new THREE.HemisphereLight(0xbfe6ff, 0x5a6a48, 1.3));
+const sunDir = new THREE.Vector3(0.42, 0.55, -0.72).normalize();
+const sun = new THREE.DirectionalLight(0xfff2d0, 1.55);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 190;
+sun.shadow.camera.left = -34; sun.shadow.camera.right = 34;
+sun.shadow.camera.top = 34;   sun.shadow.camera.bottom = -34;
+sun.shadow.bias = -0.0012;
+scene.add(sun);
+scene.add(sun.target);
+
+/* --- 空（グラデーション + 太陽） --- */
+// ドームは原点-centered ではなく「カメラに追従」させる。
+// 原点のままにすると、コース終点（z≈-1430）でカメラが半径 1000 のドームの外へ出て、
+// 裏側が空に漏れて空に白い大きな円弧が出る。
+// シェーダの視線方向も「原点から」ではなく「カメラから」にする。
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(1000, 32, 20),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: { uTop: { value: new THREE.Color(0x1f6fc4) }, uMid: { value: new THREE.Color(0x9fd4f2) },
+                uBot: { value: new THREE.Color(0xdff0f8) }, uSun: { value: sunDir.clone() } },
+    vertexShader: `
+      varying vec3 vDir;
+      void main(){ vDir = normalize((modelMatrix * vec4(position,1.0)).xyz - cameraPosition); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    fragmentShader: `
+      uniform vec3 uTop, uMid, uBot, uSun;
+      varying vec3 vDir;
+      void main(){
+        vec3 d = normalize(vDir);
+        float h = clamp(d.y * 1.5, -1.0, 1.0);
+        vec3 col = mix(uMid, uTop, pow(clamp(h, 0.0, 1.0), 0.8));
+        col = mix(uBot, col, smoothstep(-0.22, 0.10, d.y));
+        float s = max(dot(d, normalize(uSun)), 0.0);
+        col += vec3(1.0, 0.93, 0.72) * (pow(s, 900.0) * 2.4 + pow(s, 10.0) * 0.16);
+        gl_FragColor = vec4(col, 1.0);
+      }`
+  })
+);
+sky.frustumCulled = false;   // カメラに追従するので描画判定は不要
+scene.add(sky);
+
+/* =========================================================================
+   4. メッシュ生成ヘルパー（格子ジオメトリ）
+   ========================================================================= */
+function buildGrid(rows, cols, fn, flip = false) {
+  const pos = [], col = [], uv = [], idx = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const p = fn(r, c);
+      pos.push(p.x, p.y, p.z);
+      uv.push(p.u || c / (cols - 1), p.v || r / (rows - 1));
+      const cc = p.c || 0xffffff;
+      col.push(((cc >> 16) & 255) / 255, ((cc >> 8) & 255) / 255, (cc & 255) / 255);
+    }
+  }
+  for (let r = 0; r < rows - 1; r++) {
+    for (let c = 0; c < cols - 1; c++) {
+      const a = r * cols + c, b = a + 1, d = a + cols, e = d + 1;
+      if (flip) idx.push(a, b, d, b, e, d);
+      else idx.push(a, d, b, b, d, e);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/* =========================================================================
+   5. 水面（流れのシェーダ）
+   ========================================================================= */
+const MAX_FOAM_ROCKS = 10;
+const waterU = {
+  uTime: { value: 0 },
+  uFoamTex: { value: loadSpriteTex('assets/water_foam.jpg') },
+  uRockA: { value: Array.from({ length: MAX_FOAM_ROCKS }, () => new THREE.Vector4(0, 0, -1, 0)) },
+};
+waterU.uFoamTex.value.wrapS = waterU.uFoamTex.value.wrapT = THREE.RepeatWrapping;
+const WAVE_GLSL = `
+  float wv(vec2 p, float t){
+    return sin(p.x * 0.55 + t * 1.7) * 0.085
+         + sin(p.y * 0.46 - t * 2.3) * 0.11
+         + sin((p.x * 0.85 + p.y * 0.55) + t * 1.15) * 0.05
+         + sin((p.x * 0.31 - p.y * 0.95) - t * 3.1) * 0.03;
+  }`;
+
+const waterMat = new THREE.MeshStandardMaterial({
+  color: 0xffffff, roughness: 0.2, metalness: 0.06,
+});
+waterMat.onBeforeCompile = (sh) => {
+  sh.uniforms.uTime = waterU.uTime;
+  sh.uniforms.uFoamTex = waterU.uFoamTex;
+  sh.uniforms.uRockA = waterU.uRockA;
+  sh.vertexShader = `
+    uniform float uTime;
+    varying vec3 vWPos;
+    varying vec2 vSUv;
+    ${WAVE_GLSL}
+  ` + sh.vertexShader;
+  sh.vertexShader = sh.vertexShader.replace('#include <beginnormal_vertex>', `
+    #include <beginnormal_vertex>
+    {
+      float e = 0.7;
+      float h0 = wv(position.xz, uTime);
+      float hx = wv(position.xz + vec2(e, 0.0), uTime);
+      float hz = wv(position.xz + vec2(0.0, e), uTime);
+      objectNormal = normalize(vec3(-(hx - h0) / e, 1.0, -(hz - h0) / e));
+    }
+  `);
+  sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', `
+    #include <begin_vertex>
+    transformed.y += wv(position.xz, uTime);
+    vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+    vSUv = uv;
+  `);
+  sh.fragmentShader = `
+    uniform float uTime;
+    uniform sampler2D uFoamTex;
+    uniform vec4 uRockA[${MAX_FOAM_ROCKS}];
+    varying vec3 vWPos;
+    varying vec2 vSUv;
+    float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float vn(vec2 p){
+      vec2 i = floor(p), f = fract(p);
+      vec2 u = f * f * (3.0 - 2.0 * f);
+      return mix(mix(h21(i), h21(i + vec2(1,0)), u.x), mix(h21(i + vec2(0,1)), h21(i + vec2(1,1)), u.x), u.y);
+    }
+  ` + sh.fragmentShader;
+  sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `
+    #include <color_fragment>
+    float edgeD = min(vSUv.x, 1.0 - vSUv.x);
+    float flow = vSUv.y * 6.0 - uTime * 1.6;           // 流れるテクスチャ
+    float n  = vn(vec2(vSUv.x * 11.0, flow * 2.2));
+    float n2 = vn(vec2(vSUv.x * 26.0 + 5.0, flow * 4.5));
+    float edge = 1.0 - smoothstep(0.0, 0.13, edgeD);
+
+    vec3 deep = vec3(0.055, 0.239, 0.318);
+    vec3 shal = vec3(0.180, 0.510, 0.520);
+    vec3 base = mix(shal, deep, smoothstep(0.02, 0.30, edgeD));
+    base = mix(base, base * 1.14, n * 0.5 + 0.5);        // 流れの濃淡
+
+    // 生成した白波テクスチャ（2 方向スクロールを重ね、継ぎ目を消す）
+    vec3 ft = texture2D(uFoamTex, vec2(vSUv.x * 1.6 + flow * 0.055, flow * 0.16)).rgb;
+    vec3 ft2 = texture2D(uFoamTex, vec2(vSUv.x * 3.1 - flow * 0.10, flow * 0.31 + 0.5)).rgb;
+    float ftFoam = smoothstep(0.58, 0.90, ft.g * 0.65 + ft2.g * 0.45);
+    base = mix(base, base * 0.86, smoothstep(0.25, 0.75, ft.r * 0.5 + ft2.r * 0.5));  // 流れの濃淡
+
+    // 段差（滝）。vSUv.y から z を復元して判定する
+    //   lip   … lip のふちから落ちる面（狭い範囲で爆発的に白波）
+    //   pool  … 落下先の手前の泡の溜まり
+    float zz = 90.0 - vSUv.y * 8.0;
+    const float D1 = -455.0, D2 = -1010.0;
+    // lip：落ち口的近傍（上流側のふちと落下面）
+    // 上流側は短めに、下流（落ち先）は長めに白波を展く。剥離は lip だけを薄くする
+    float dd1 = zz - D1, dd2 = zz - D2;
+    float rapid = (1.0 - smoothstep(0.0, 5.0, -dd1)) * 0.55 * step(dd1, 0.0)   // 上流側は距離を短くして薄く
+                 + (1.0 - smoothstep(0.0, 22.0, dd1)) * step(0.0, dd1)            // 落ち先は長く白波
+                 + (1.0 - smoothstep(0.0, 6.0, -dd2)) * 0.55 * step(dd2, 0.0)
+                 + (1.0 - smoothstep(0.0, 24.0, dd2)) * step(0.0, dd2);
+    // pool：落下先の飛沫プール（手前ほど濃く、下流へ流れるほど薄れる）
+    float pool   = step(zz, D1) * (1.0 - smoothstep(1.0, 26.0, D1 - zz))
+                 + step(zz, D2) * (1.0 - smoothstep(1.0, 30.0, D2 - zz));
+    rapid = clamp(rapid, 0.0, 1.0);
+    pool  = clamp(pool, 0.0, 1.0);
+
+    float foam = smoothstep(0.78, 1.16, n * 0.45 + n2 * 0.30 + 0.42) * 0.7;
+    foam += ftFoam * 0.62;                                // 白波テクスチャ
+    foam += edge * 0.7;                                   // 岸際の泡
+    // lip はほぼ真っ白、pool もかなり白く。画像のような「白いカーテン」を作る
+    float lipFoam  = rapid * (0.52 + 0.34 * n2 + 0.20 * n);
+    // 落下先は深みの青を残して、活きる白波にする
+    float poolFoam = pool  * (0.26 + 0.40 * smoothstep(0.18, 0.78, n) + 0.18 * n2);
+    foam = max(foam, max(lipFoam, poolFoam));
+    foam += smoothstep(0.80, 1.0, n2) * smoothstep(0.30, 0.0, abs(fract(flow * 0.35) - 0.5)) * 0.5;
+    for (int i = 0; i < ${MAX_FOAM_ROCKS}; i++) {
+      float r = uRockA[i].z;
+      if (r > 0.0) {
+        float d = distance(vWPos.xz, uRockA[i].xy);
+        float ring = 1.0 - smoothstep(r * 0.85, r * 2.0 + 0.9, d);
+        foam += ring * (0.55 + 0.45 * sin(d * 3.4 - uTime * 6.0)) * 0.8;
+      }
+    }
+    foam = clamp(foam, 0.0, 1.0);
+    diffuseColor.rgb = mix(base, vec3(1.0, 1.0, 1.0), foam);
+  `);
+  sh.fragmentShader = sh.fragmentShader.replace('#include <roughnessmap_fragment>', `
+    #include <roughnessmap_fragment>
+    roughnessFactor = mix(roughnessFactor, 0.62, smoothstep(0.35, 0.9, diffuseColor.g));
+  `);
+};
+
+const waterMesh = new THREE.Mesh(
+  buildGrid(Math.floor((90 - (CFG.goalZ - 150)) / 2) + 1, 15, (r, c) => {
+    const z = 90 - r * 2;
+    const hw = halfW(z) + 2.2;
+    const u = c / 14;
+    return { x: cx(z) + (u * 2 - 1) * hw, y: riverY(z), z, u, v: (90 - z) / 8 };
+  }, true),
+  waterMat
+);
+waterMesh.receiveShadow = true;
+scene.add(waterMesh);
+
+/* =========================================================================
+   6. 岸（地形）
+   ========================================================================= */
+const OUTS = [0, 1.3, 3.2, 6.5, 12, 21, 34, 52];
+const BANK_H = [-1.5, 0.35, 1.35, 2.9, 5.6, 10.5, 17.5, 27.0];
+const C_WET = 0xb0a081, C_SAND = 0xc2b189, C_GRASS = 0x63a04b, C_FOREST = 0x2f5f36, C_ROCK = 0x6d6a63;
+function bankColor(out, n) {
+  let c;
+  if (out < 1.6) c = C_WET;
+  else if (out < 3.6) c = C_SAND;
+  else if (out < 9) c = C_GRASS;
+  else c = mixHex(C_GRASS, C_FOREST, smoothstep(9, 26, out));
+  if (n > 0.30 && out > 4) c = mixHex(c, C_ROCK, smoothstep(0.30, 0.55, n) * 0.6);
+  else if (n < -0.32 && out > 3) c = mixHex(c, C_GRASS, 0.4);
+  return c;
+}
+function mixHex(a, b, t) {
+  const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
+  const br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
+  return ((ar + (br - ar) * t) << 16 | (ag + (bg - ag) * t) << 8 | (ab + (bb - ab) * t)) & 0xffffff;
+}
+const rows = Math.floor((90 - (CFG.goalZ - 150)) / 4) + 1;
+// 岸の高さ（樹木・岩の配置にも使うので共通化する）
+function bankY(z, c, side) {
+  const n = vnoise((z * 0.06 + side * 31) % 997, c * 0.7 + side * 13) * (0.6 + c * 0.22);
+  const rough = vnoise(z * 0.19, c * 1.9 + side * 57) * (0.25 + c * 0.18);
+  return { y: riverY(z) + BANK_H[c] + n * (0.5 + c * 0.55) + rough * 1.1, n, rough };
+}
+function bankYAt(z, out, side) {
+  // out(岸からの距離) から高さを補間
+  let ci = 0;
+  for (let i = 0; i < OUTS.length - 1; i++) if (out >= OUTS[i]) ci = i;
+  ci = Math.min(ci, OUTS.length - 2);
+  const t = clamp((out - OUTS[ci]) / (OUTS[ci + 1] - OUTS[ci]), 0, 1);
+  const a = bankY(z, ci, side).y, b = bankY(z, ci + 1, side).y;
+  return lerp(a, b, t);
+}
+// 岸のディテール（生成した地面テクスチャを倍率として乗せる）
+const groundDetail = (() => {
+  const t = loadSpriteTex('assets/ground_detail.jpg', false);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+})();
+for (const side of [-1, 1]) {
+  const geo = buildGrid(rows, OUTS.length, (r, c) => {
+    const z = 90 - r * 4;
+    const hw = halfW(z);
+    const out = OUTS[c];
+    const b = bankY(z, c, side);
+    return { x: cx(z) + side * (hw + out), y: b.y, z, c: bankColor(out, b.n + b.rough),
+             u: (hw + out) * 0.09, v: z * 0.09 };     // ワールド基準でタイリング
+  }, side > 0);
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, flatShading: true });
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uDetail = { value: groundDetail };
+    sh.uniforms.uDetailAmt = { value: 0.85 };
+    sh.vertexShader = 'varying vec2 vDUv;\n' + sh.vertexShader;
+    sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\n  vDUv = uv;');
+    sh.fragmentShader = 'varying vec2 vDUv;\nuniform sampler2D uDetail;\nuniform float uDetailAmt;\n' + sh.fragmentShader;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `
+      #include <color_fragment>
+      {
+        float d = 0.60 + texture2D(uDetail, vDUv).r * 0.90;
+        diffuseColor.rgb *= mix(1.0, d, uDetailAmt);
+      }
+    `);
+  };
+  const m = new THREE.Mesh(geo, mat);
+  m.receiveShadow = true;
+  scene.add(m);
+}
+
+/* =========================================================================
+   7. コース生成（岩 / 旗ゲート / 樹木）
+   ========================================================================= */
+const rocks = [];   // {z, x, r, mesh}
+const gates = [];   // {z, s, half, passed, flags}
+
+// 岩（水中）
+const rockGeo = (() => {
+  const g0 = new THREE.IcosahedronGeometry(1, 1);
+  const rp = g0.attributes.position;
+  for (let i = 0; i < rp.count; i++) {
+    const x = rp.getX(i), y = rp.getY(i), z = rp.getZ(i);
+    const k = 1 + vnoise(x * 2.1 + 5, z * 2.1) * 0.42 + vnoise(y * 3.3, x * 3.3) * 0.22;
+    rp.setXYZ(i, x * k, y * k * 0.78, z * k);
+  }
+  g0.computeVertexNormals();
+  return g0;
+})();
+const rockMat = new THREE.MeshStandardMaterial({ color: 0x9c968a, roughness: 0.92, flatShading: true });
+
+// 旗ゲートの共有パーツ
+// ポールの高さは FLAG_POLE_H。旗はその 0.25m 下。
+// 少し持ち上げると遠景（木々や岩）に紋れず、
+// ゲートが読み取りやするようになる。
+// 上げすきると川ではなく「門」に見えて現実感が失われるので、
+// 控めめにしている。
+const FLAG_POLE_H = 2.6;
+const poleGeo = (() => { const g0 = new THREE.CylinderGeometry(0.055, 0.07, FLAG_POLE_H, 6); g0.translate(0, FLAG_POLE_H / 2, 0); return g0; })();
+const clothGeo = (() => { const g0 = new THREE.PlaneGeometry(0.85, 0.55, 4, 2); g0.translate(0.42, 0, 0); return g0; })();
+const floatGeo = (() => { const g0 = new THREE.SphereGeometry(0.34, 10, 8); g0.scale(1, 0.62, 1); return g0; })();
+const poleMat = new THREE.MeshStandardMaterial({ color: 0xf2f4f6, roughness: 0.6 });
+const clothMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.7, side: THREE.DoubleSide });
+const floatMat = new THREE.MeshStandardMaterial({ color: 0xf6c445, roughness: 0.55 });
+
+// 難易度。川の形（蛇行・段差）は固定 seed で毎回同じ。
+// 難易度は「流れの押し出し」「岩の重さ」「旗の幅と判定」に効かせる。
+const DIFFS = {
+  easy:   { name: 'EASY',   curvK: 0.055, eddyK: 0.16, gateScale: 1.28, gateTol: 1.22, rockPts: -60,  rockR: 0.68 },
+  normal: { name: 'NORMAL', curvK: 0.115, eddyK: 0.40, gateScale: 1.00, gateTol: 1.00, rockPts: -120, rockR: 0.82 },
+  hard:   { name: 'HARD',   curvK: 0.200, eddyK: 0.62, gateScale: 0.70, gateTol: 0.86, rockPts: -180, rockR: 0.92 },
+};
+let diffKey = 'normal';
+let DIFF = DIFFS.normal;
+
+function buildObstacles() {
+  const orng = mulberry32(987654321);        // 毎回まったく同じコースになる
+  const R = (a, b) => a + orng() * (b - a);
+
+  // --- 岩 ---
+  let z = -55, guard = 0;
+  while (z > CFG.goalZ + 70 && guard++ < 400) {
+    z -= R(26, 46);
+    const hw = halfW(z);
+    const r = R(1.0, 2.3);
+    const x = cx(z) + R(-1, 1) * (hw - r - 2.2);
+    let ok = true;
+    for (const o of rocks) if (Math.hypot(o.z - z, o.x - x) < o.r + r + 9) { ok = false; break; }
+    if (!ok) continue;
+    const m = new THREE.Mesh(rockGeo, rockMat);
+    m.position.set(x, riverY(z) - 0.45 + r * 0.42, z);
+    m.rotation.set(R(0, 3), R(0, 6.28), R(0, 3));
+    m.scale.set(r * R(0.9, 1.35), r * R(0.8, 1.2), r * R(0.9, 1.35));
+    m.castShadow = true; m.receiveShadow = true;
+    scene.add(m);
+    rocks.push({ z, x, r, mesh: m });
+  }
+
+  // --- 旗ゲート ---
+  let gz = -42, gi = 0, prevS = 0;
+  while (gz > CFG.goalZ + 60) {
+    gz -= R(30, 44);
+    const hw = halfW(gz);
+    const half = R(3.6, 4.8);
+    // 旗は「流れに沿った自然なライン」上にはしる。
+    // 直前のゲートから +-4.5m しか動かないので、片道8m規模の移動は求められない。
+    const sMax = Math.max(1.0, hw - half - 3.2);
+    let s = 0, placed = false;
+    for (let tryN = 0; tryN < 20; tryN++) {
+      s = clamp(prevS + R(-1, 1) * 4.5, -sMax, sMax);
+      // 旗の「中間」に岩が塞いでいないかだけ見る（端の岩は問題ない）
+      let bad = false;
+      for (const r of rocks) {
+        if (Math.abs(r.z - gz) < 5 && Math.abs((r.x - cx(gz)) - s) < half * 0.8) { bad = true; break; }
+      }
+      if (!bad) { placed = true; break; }
+    }
+    if (!placed) continue;
+    prevS = s;
+
+    const gate = { z: gz, s, halfBase: half, half, passed: false, flags: [], phase: gi * 0.7 };
+    for (const side of [-1, 1]) {
+      const grp = new THREE.Group();
+      const pole = new THREE.Mesh(poleGeo, poleMat); pole.castShadow = true;
+      const cloth = new THREE.Mesh(clothGeo, clothMat); cloth.position.y = FLAG_POLE_H - 0.25; cloth.castShadow = true;
+      const flt = new THREE.Mesh(floatGeo, floatMat); flt.position.y = 0.05; flt.castShadow = true;
+      grp.add(pole, cloth, flt);
+      grp.userData.side = side;
+      grp.position.set(cx(gz) + s + side * half, riverY(gz) + 0.05, gz);
+      grp.rotation.y = side > 0 ? 0 : Math.PI;
+      scene.add(grp);
+      gate.flags.push({ grp, cloth, phase: gi * 0.7 + (side > 0 ? 0 : 1.7) });
+    }
+    gates.push(gate);
+    gi++;
+  }
+}
+
+// 岸の巨石
+{
+  const boulderGeo = new THREE.IcosahedronGeometry(1, 0);
+  const bp = boulderGeo.attributes.position;
+  for (let i = 0; i < bp.count; i++) {
+    const x = bp.getX(i), y = bp.getY(i), z = bp.getZ(i);
+    const k = 1 + vnoise(x * 2.4, z * 2.4 + y) * 0.4;
+    bp.setXYZ(i, x * k, y * k * 0.8, z * k);
+  }
+  boulderGeo.computeVertexNormals();
+  const bMat = new THREE.MeshStandardMaterial({ color: 0x9a948a, roughness: 0.95, flatShading: true });
+  const COUNT = 220;
+  const bInst = new THREE.InstancedMesh(boulderGeo, bMat, COUNT);
+  bInst.castShadow = true; bInst.receiveShadow = true;
+  const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), pv = new THREE.Vector3();
+  for (let i = 0; i < COUNT; i++) {
+    const zz = rand(90, CFG.goalZ - 100);
+    const side = rng() < 0.5 ? -1 : 1;
+    const out = rand(1.5, 16);
+    const hw = halfW(zz);
+    const x = cx(zz) + side * (hw + out);
+    const y = bankYAt(zz, out, side) + rand(-0.3, 0.3) - 0.4;
+    const s = rand(0.9, 3.1);
+    pv.set(x, y, zz); e.set(rand(0, 3), rand(0, 6.28), rand(0, 3));
+    q.setFromEuler(e); sc.set(s * rand(0.9, 1.4), s * rand(0.7, 1.1), s * rand(0.9, 1.4));
+    bInst.setMatrixAt(i, mtx.compose(pv, q, sc));
+  }
+  scene.add(bInst);
+}
+
+// 樹木：procedural-lowpoly-trees スキルを使う（読み込めなければ従来の円錐にフォールバック）
+const treeGroups = [];          // 毎フレーム update(camera) を呼ぶ
+
+function fallbackTrees() {
+  const trunkGeo = new THREE.CylinderGeometry(0.22, 0.34, 3.2, 6);
+  trunkGeo.translate(0, 1.6, 0);
+  const leafGeo = new THREE.ConeGeometry(1.5, 5.2, 7);
+  leafGeo.translate(0, 4.6, 0);
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5b4632, roughness: 1, flatShading: true });
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true });
+  const COUNT = 620;
+  const tInst = new THREE.InstancedMesh(trunkGeo, trunkMat, COUNT);
+  const lInst = new THREE.InstancedMesh(leafGeo, leafMat, COUNT);
+  tInst.castShadow = lInst.castShadow = true;
+  lInst.receiveShadow = true;
+  const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), pv = new THREE.Vector3();
+  const cA = new THREE.Color(0x3f7a3a), cB = new THREE.Color(0x6d9c33), tmp = new THREE.Color();
+  for (let i = 0; i < COUNT; i++) {
+    const zz = rand(90, CFG.goalZ - 120);
+    const side = rng() < 0.5 ? -1 : 1;
+    const out = rand(6, 52);
+    const x = cx(zz) + side * (halfW(zz) + out);
+    const y = bankYAt(zz, out, side) - 0.9;
+    const s = rand(0.75, 1.9);
+    pv.set(x, y, zz); e.set(rand(-0.05, 0.05), rand(0, 6.28), rand(-0.05, 0.05));
+    q.setFromEuler(e); sc.set(s, s * rand(0.85, 1.35), s);
+    tInst.setMatrixAt(i, mtx.compose(pv, q, sc));
+    lInst.setMatrixAt(i, mtx.compose(pv, q, sc));
+    tmp.copy(cA).lerp(cB, rng());
+    lInst.setColorAt(i, tmp);
+  }
+  scene.add(tInst); scene.add(lInst);
+}
+
+// 渓谷の植生：水辺にヤナギ／中腹にモミジ・オーク・イチョウ／上斜面にスギ・ヒノキ
+function buildTrees(Trees) {
+  const R = mulberry32(424242);          // 毎回同じ森にする
+  const rf = (a, b) => a + R() * (b - a);
+  const zA = 95, zB = CFG.goalZ - 130;
+  const bins = { willow: [], momiji: [], oak: [], ichou: [], sugi: [], hinoki: [], fir: [], shrub: [] };
+
+  for (let i = 0; i < 2600; i++) {
+    const z = rf(zA, zB);
+    const side = R() < 0.5 ? -1 : 1;
+    const hw = halfW(z);
+    // 水際ほど密になるよう、岸からの距離で間引く
+    const u = Math.pow(R(), 1.7);
+    const out = 1.2 + u * 52;
+    const x = cx(z) + side * (hw + out);
+    const y = bankYAt(z, out, side) - 0.5;
+    const p = { x, y, z, rot: R() * 6.283 };
+
+    if (out < 6.5 && R() < 0.62) { p.scale = rf(0.55, 0.9); bins.willow.push(p); }   // 水際：低くして川を塞がない
+    else if (out < 13 && R() < 0.62) { p.scale = rf(0.55, 0.95); bins.momiji.push(p); }
+    else if (out < 19 && R() < 0.5) { p.scale = rf(0.65, 1.05); bins.oak.push(p); }
+    else if (out < 24 && R() < 0.4) { p.scale = rf(0.6, 0.95); bins.ichou.push(p); }
+    else if (out < 34 && R() < 0.5) { p.scale = rf(0.7, 1.05); bins.fir.push(p); }
+    else if (R() < 0.62) { p.scale = rf(0.75, 1.25); bins.sugi.push(p); }
+    else { p.scale = rf(0.75, 1.2); bins.hinoki.push(p); }
+  }
+  // 林床の低木
+  for (let i = 0; i < 420; i++) {
+    const z = rf(zA, zB), side = R() < 0.5 ? -1 : 1;
+    const out = rf(2, 22);
+    bins.shrub.push({ x: cx(z) + side * (halfW(z) + out), y: bankYAt(z, out, side) - 0.3, z, rot: R() * 6.283, scale: rf(0.7, 1.6) });
+  }
+
+  const mk = (sp, list, opts) => {
+    if (!list.length) return;
+    const g = Trees.createInstanced(sp, list, { variants: 3, ...opts });
+    // 葉は map が乗算されるのでマテリアル色で暗い新緑に沈める（背景との差が目立つ）
+    // alphaTest のあるマテリアルが葉（幹には付いていない）
+    g.traverse((o) => {
+      if (o.isMesh && o.material && o.material.alphaTest > 0) {
+        o.material.color.setHex(0x6d7f63);
+        o.material.roughness = 0.92;
+      }
+    });
+    scene.add(g);
+    treeGroups.push(g);
+  };
+  // 遠い斜面は三角形を削って、近くの木だけ細かく
+  const far = { skipTwigs: true, distances: { l0: 24, l1: 62, far: 165 } };
+  const near = { distances: { l0: 30, l1: 78, far: 175 } };
+  mk('sugi', bins.sugi, { ...far, seed: 11, height: 20 });
+  mk('hinoki', bins.hinoki, { ...far, seed: 23, height: 16 });
+  mk('fir', bins.fir, { ...far, seed: 37, height: 12 });
+  mk('momiji', bins.momiji, { ...near, seed: 5, params: { leafHue: 95 } });   // 青葉
+  mk('oak', bins.oak, { ...near, seed: 13, height: 8 });
+  mk('ichou', bins.ichou, { ...near, seed: 29, height: 14 });
+  mk('willow', bins.willow, { ...near, seed: 41, height: 7, shadows: false });
+  mk('shrub', bins.shrub, { ...far, seed: 59, shadows: false });
+  Trees.wind = 0.3;
+}
+
+async function initTrees() {
+  try {
+    const mod = await import('./trees.module.js');
+    buildTrees(mod.default(THREE));
+  } catch (e) {
+    console.warn('procedural-lowpoly-trees を読み込めませんでした:', e);
+    fallbackTrees();
+  }
+}
+
+const totalGates = () => gates.length;
+
+// --- 段差の lip にある岩棚（見た目のみ・衝突判定は無い） ---
+function makeLedges() {
+  const g0 = new THREE.IcosahedronGeometry(1, 1);
+  const a = g0.attributes.position;
+  for (let i = 0; i < a.count; i++) {
+    const x = a.getX(i), y = a.getY(i), z = a.getZ(i);
+    const k = 1 + vnoise(x * 2.3 + 9, z * 2.3) * 0.38 + vnoise(y * 3.1, x * 3.1) * 0.2;
+    a.setXYZ(i, x * k, y * k * 0.7, z * k);
+  }
+  g0.computeVertexNormals();
+  const m0 = new THREE.MeshStandardMaterial({ color: 0x6e6a63, roughness: 0.98, flatShading: true });
+  for (const d of DROPS) {
+    const hw = halfW(d.z);
+    const n = 14;
+    for (let i = 0; i < n; i++) {
+      const s = (i / (n - 1) - 0.5) * 2;
+      // 中央は流れ道として空ける（ボートとカメラの通り道を阻けない）
+      if (Math.abs(s) < 0.42) continue;
+      const x = cx(d.z) + s * (hw + 1.5);
+      const r = rand(0.7, 1.5);
+      const m = new THREE.Mesh(g0, m0);
+      // 頂部が水面すれすれに来るまで沈める（水が岩の上を流れ落ちる）
+      const sy = r * rand(0.5, 0.7);
+      m.position.set(x, riverY(d.z) - sy + r * 0.10, d.z + rand(-2.0, 1.0));
+      m.rotation.set(0, rand(0, 6.28), 0);            // 天地のみ回して高さを抑える
+      m.scale.set(r * rand(1.2, 1.9), sy, r * rand(0.9, 1.3));
+      m.castShadow = true; m.receiveShadow = true;
+      scene.add(m);
+    }
+    // 両岸の岩壁（滝の脇）
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 4; i++) {
+        const r = rand(2.2, 4.0);
+        const m = new THREE.Mesh(g0, m0);
+        m.position.set(cx(d.z) + side * (hw + rand(1.0, 3.5)), riverY(d.z) + r * 0.35, d.z + rand(-3, 3));
+        m.rotation.set(rand(0, 3), rand(0, 6.28), rand(0, 3));
+        m.scale.set(r * rand(1.1, 1.6), r * rand(0.8, 1.2), r * rand(0.9, 1.3));
+        m.castShadow = true; m.receiveShadow = true;
+        scene.add(m);
+      }
+    }
+  }
+}
+
+// --- 段差の落下面：白い飛沫のカーテン ---
+let fallTex = null;
+const fallMats = [];
+function makeFalls() {
+  fallTex = loadSpriteTex('assets/water_foam.jpg', false);
+  fallTex.wrapS = fallTex.wrapT = THREE.RepeatWrapping;
+  for (const d of DROPS) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, alphaMap: fallTex, transparent: true, opacity: 0.0,
+      depthWrite: false, side: THREE.DoubleSide,
+    });
+    const hw = halfW(d.z), cols = 15, rows = 6;
+    const geo = buildGrid(rows, cols, (r, c) => {
+      const u = c / (cols - 1);
+      const x = cx(d.z) + (u * 2 - 1) * (hw + 1.6);
+      const t2 = r / (rows - 1);
+      const y = riverY(d.z) - t2 * (d.h + 0.15);
+      return { x, y, z: d.z + 0.4 + Math.sin(u * 4.2) * 0.5 + t2 * 1.1,
+               u: u * 2.4, v: t2 * 1.1 };
+    });
+    const m = new THREE.Mesh(geo, mat);
+    m.renderOrder = 2;
+    scene.add(m);
+    fallMats.push({ mat, d });
+  }
+}
+
+/* --- 次のゲートを示すマーカー --- */
+const nextMark = new THREE.Group();
+{
+  const mat = new THREE.MeshBasicMaterial({ color: 0x7ff0ff, transparent: true, opacity: 0.9, depthWrite: false });
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.95, 4), mat);
+  cone.rotation.x = Math.PI;           // 下向き
+  cone.position.y = 1.2;
+  nextMark.add(cone);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.25, 24), mat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.12;
+  nextMark.add(ring);
+  nextMark.visible = false;
+  scene.add(nextMark);
+}
+function updateNextMark(t) {
+  const g = gates.find((x) => !x.passed && x.z <= P.z + 2);
+  if (!g) { nextMark.visible = false; return; }
+  const d = P.z - g.z;
+  if (d > 170) { nextMark.visible = false; return; }
+  nextMark.visible = true;
+  nextMark.position.set(cx(g.z) + g.s, riverY(g.z) + 3.4 + Math.sin(t * 3) * 0.25, g.z);
+  nextMark.rotation.y = t * 0.8;
+  const k = clamp(1 - d / 170, 0.05, 1);
+  nextMark.scale.setScalar(0.8 + k * 0.6);
+  nextMark.children.forEach((c) => { c.material.opacity = 0.35 + k * 0.5; });
+}
+
+/* =========================================================================
+   8. 桟橋（ゴール）とスタート地点
+   ========================================================================= */
+function makeDock(z, bannerTex) {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: 0x8a6a44, roughness: 0.92 });
+  const woodDark = new THREE.MeshStandardMaterial({ color: 0x6b5033, roughness: 0.95 });
+  const hw = halfW(z);
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(hw * 1.35, 0.5, 5.2), wood);
+  deck.position.y = 0.75;
+  deck.castShadow = true; deck.receiveShadow = true;
+  g.add(deck);
+  for (let i = -3; i <= 3; i++) {
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 3.4, 7), woodDark);
+    p.position.set(i * (hw * 1.35 / 6.6), 0.1, i % 2 === 0 ? -2.2 : 2.2);
+    p.castShadow = true;
+    g.add(p);
+  }
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(hw * 1.35, 0.16, 0.16), woodDark);
+  rail.position.set(0, 1.6, -2.4); g.add(rail);
+  // 横断幕（生成したテクスチャ 1344x256 = 5.25:1）。カメラが低いので高めに持ち上げる
+  const bw = hw * 1.02, bh = bw / 5.25;
+  const railY = 3.5;
+  for (const s of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, railY + bh + 0.4, 6), woodDark);
+    post.position.set(s * bw * 0.47, (railY + bh + 0.4) * 0.5, 0); post.castShadow = true; g.add(post);
+  }
+  const topRail = new THREE.Mesh(new THREE.BoxGeometry(bw * 0.98, 0.14, 0.14), woodDark);
+  topRail.position.set(0, railY + bh + 0.2, 0); g.add(topRail);
+  const banner = new THREE.Mesh(
+    new THREE.PlaneGeometry(bw, bh),
+    new THREE.MeshStandardMaterial({ map: bannerTex, side: THREE.DoubleSide, roughness: 0.85 })
+  );
+  banner.position.set(0, railY + bh * 0.5, 0.1);
+  banner.castShadow = true;
+  g.add(banner);
+  g.position.set(cx(z), riverY(z), z);
+  scene.add(g);
+  return g;
+}
+makeDock(CFG.goalZ + 2.6, loadSpriteTex('assets/banner.png'));
+
+// スタート地点は川を塞がないよう、右岸に「大会看板」を立てる
+function makeStartSign() {
+  const g = new THREE.Group();
+  const postMat = new THREE.MeshStandardMaterial({ color: 0x6b5033, roughness: 0.95 });
+  const bw = 7.2, bh = bw / 5.25;
+  for (const sx of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 3.6, 6), postMat);
+    post.position.set(sx * bw * 0.46, 1.8, 0);
+    post.castShadow = true;
+    g.add(post);
+  }
+  const board = new THREE.Mesh(
+    new THREE.PlaneGeometry(bw, bh),
+    new THREE.MeshStandardMaterial({ map: loadSpriteTex('assets/banner_start.png'), side: THREE.DoubleSide, roughness: 0.85 })
+  );
+  board.position.y = 2.9;
+  board.castShadow = true;
+  g.add(board);
+  const z = CFG.startZ - 6;
+  g.position.set(cx(z) + halfW(z) + 2.6, riverY(z), z);
+  g.rotation.y = -Math.PI / 2;      // 川に向かって正対
+  scene.add(g);
+}
+makeStartSign();
+
+/* =========================================================================
+   9. カヤック + パドラー
+   ========================================================================= */
+// 席（コクピット）の位置。コクピットとアバターが共有する。
+// 船体の中心（z=0）に置く。アバターの腰と一致するので、そのまま座席になる。
+// アバターを後方に寄せると肩と櫂の Z 間隔が増えて
+// 腕が届かなくなるため、座り位置は変えない。
+const SEAT_Z = 0.0;
+
+function hullShape(len, beam, n, bowSharp) {
+  const s = new THREE.Shape();
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;                       // 0 = 後ろ, 1 = 前(ノーズ)
+    const z = len * (t - 0.5);
+    const w = beam * 0.5 * Math.pow(Math.sin(Math.PI * Math.pow(t, bowSharp)), 0.62);
+    pts.push([w, z]);
+  }
+  for (let i = n; i >= 0; i--) {
+    const t = i / n;
+    const z = len * (t - 0.5);
+    const w = -beam * 0.5 * Math.pow(Math.sin(Math.PI * Math.pow(t, bowSharp)), 0.62);
+    pts.push([w, z]);
+  }
+  s.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]);
+  s.closePath();
+  return s;
+}
+const kayak = new THREE.Group();
+{
+  const shape = hullShape(3.6, 0.66, 16, 0.78);
+  const hullGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.30, bevelEnabled: true, bevelThickness: 0.11, bevelSize: 0.09, bevelSegments: 2, curveSegments: 2 });
+  hullGeo.rotateX(-Math.PI / 2);
+  hullGeo.computeVertexNormals();
+  // 船底はデッキ（0xffd23f）より少し濃い黄色。
+  // 赤にすると水線に出たり消えたりして注意を引いてしまうので、目は立たせない色にする。
+  const hull = new THREE.Mesh(hullGeo, new THREE.MeshStandardMaterial({ color: 0xd9a52a, roughness: 0.32, metalness: 0.12 }));
+  hull.castShadow = true; hull.receiveShadow = true;
+  kayak.add(hull);
+
+  // デッキ（上半分）
+  const deckGeo = new THREE.ExtrudeGeometry(hullShape(3.42, 0.60, 16, 0.78), { depth: 0.20, bevelEnabled: true, bevelThickness: 0.07, bevelSize: 0.06, bevelSegments: 2, curveSegments: 2 });
+  deckGeo.rotateX(-Math.PI / 2);
+  deckGeo.computeVertexNormals();
+  const deck = new THREE.Mesh(deckGeo, new THREE.MeshStandardMaterial({ color: 0xffd23f, roughness: 0.4 }));
+  deck.position.y = 0.30; deck.castShadow = true;
+  kayak.add(deck);
+
+  // コクピット。デッキの上面(local y=0.57)と完全に同面になると z-fighting で
+  // ノイズを少し差し出して「コーミング」として見せる
+  const cock = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.30, 0.22, 16), new THREE.MeshStandardMaterial({ color: 0x1a1d22, roughness: 0.9 }));
+  cock.scale.set(1, 1, 1.5); cock.position.set(0, 0.525, SEAT_Z);
+  kayak.add(cock);
+
+  // 前後デッキのライン（デッキ上面から浮かせる）
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 3.3), new THREE.MeshStandardMaterial({ color: 0x22252b, roughness: 0.6 }));
+  stripe.position.set(0, 0.578, 0); kayak.add(stripe);
+  kayak.userData.cock = cock;
+}
+scene.add(kayak);
+
+// パドラの前後位置（艇ローカル座標。-Z が船首）。
+// VRM を 1.3 倍にすると胸が前に出るため、オールを少し前に退避させる。
+// 大きくしすぎると櫂が水に入る位置までずれるので、控えめにしている。
+const PADDLE_Z = -0.18;
+
+// 手の位置の微調整。
+// GRIP_UP : 手を櫂より持ち上げる量（手のひらが櫂を受ける高さ）
+// GRIP_FWD: 手首を櫂から離す割合（手の長さに対して。0.5 でこぶしが櫂に重なる）
+const GRIP_UP = 0.05;
+const GRIP_FWD = 0.32;
+
+// パドラー
+const paddler = new THREE.Group();
+kayak.add(paddler);
+{
+  const skin = new THREE.MeshStandardMaterial({ color: 0xe8b48c, roughness: 0.75 });
+  const vest = new THREE.MeshStandardMaterial({ color: 0xff3b57, roughness: 0.8 });
+
+  const torsoPivot = new THREE.Group();          // 上体を傾けるための軸
+  paddler.add(torsoPivot);
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.20, 0.34, 4, 10), vest);
+  torso.position.set(0, 0.86, 0.34); torso.rotation.x = -0.22; torso.castShadow = true;
+  torsoPivot.add(torso);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.155, 14, 12), skin);
+  head.position.set(0, 1.24, 0.26); head.castShadow = true;
+  torsoPivot.add(head);
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.175, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }));
+  helmet.position.set(0, 1.25, 0.26); helmet.castShadow = true;
+  torsoPivot.add(helmet);
+
+  // 腕：1本の棒ではなく「肩 → 肘 → 手首 → 手」に分ける。
+  // 上腕をライフジャケット（同色の袖）にすると、一人称でも腕と認識しやすい
+  const sleeve = new THREE.MeshStandardMaterial({ color: 0xff3b57, roughness: 0.8 });
+  const armGeo = {
+    // 上腕（肩側が太い）
+    up: new THREE.CylinderGeometry(0.072, 0.058, 1, 8),
+    // 前腕（手首側が細い）
+    fo: new THREE.CylinderGeometry(0.058, 0.042, 1, 8),
+  };
+  armGeo.up.translate(0, 0.5, 0);
+  armGeo.fo.translate(0, 0.5, 0);
+  const capGeo = new THREE.SphereGeometry(0.085, 10, 8);            // 肩の関節
+  const handGeo = new THREE.SphereGeometry(0.063, 10, 7);           // 手
+  handGeo.scale(1.0, 1.4, 0.72);
+  function makeArm() {
+    const g = new THREE.Group();
+    const up = new THREE.Mesh(armGeo.up, sleeve);
+    const fo = new THREE.Mesh(armGeo.fo, skin);
+    const shoulder = new THREE.Mesh(capGeo, sleeve);
+    const hand = new THREE.Mesh(handGeo, skin);
+    for (const m of [up, fo, shoulder, hand]) { m.castShadow = true; g.add(m); }
+    paddler.add(g);
+    return { g, up, fo, shoulder, hand };
+  }
+  const armL = makeArm(), armR = makeArm();
+
+  // パドル
+  const paddle = new THREE.Group();
+  paddle.position.set(0, 1.02, PADDLE_Z);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 2.05, 8), new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.5 }));
+  shaft.rotation.z = Math.PI / 2;
+  paddle.add(shaft);
+  const bladeGeo = new THREE.BoxGeometry(0.52, 0.02, 0.19);
+  const bladeMat = new THREE.MeshStandardMaterial({ color: 0x1f9ad6, roughness: 0.45 });
+  for (const s of [-1, 1]) {
+    const b = new THREE.Mesh(bladeGeo, bladeMat);
+    b.position.set(s * 1.14, 0, 0); b.rotation.z = s * 0.12; b.castShadow = true;
+    paddle.add(b);
+  }
+  paddler.add(paddle);
+  paddler.userData = { armL, armR, paddle, torsoPivot };   // armL/armR = {g, up, fo, shoulder, hand}
+}
+
+// =========================================================================
+//  10. パーティクル（水しぶき）
+// =========================================================================
+const PMAX = 760;
+const pPos = new Float32Array(PMAX * 3), pVel = new Float32Array(PMAX * 3);
+const pSize = new Float32Array(PMAX), pAlpha = new Float32Array(PMAX), pCol = new Float32Array(PMAX * 3);
+const pKind = new Float32Array(PMAX);      // 0 = 泡の塊 / 1 = しぶきの冠
+let pHead = 0;
+// 生成したスプライト（黒背景 → 輝度をそのままアルファに使う）
+function loadSpriteTex(url, asColor = true) {
+  const t = new THREE.TextureLoader().load(url);
+  t.colorSpace = asColor ? THREE.SRGBColorSpace : THREE.NoColorSpace;  // マスク用途は線形のまま
+  return t;
+}
+const TEX_FOAM = loadSpriteTex('assets/foam.png', false);
+const TEX_SPLASH = loadSpriteTex('assets/splash.png', false);
+const pGeo = new THREE.BufferGeometry();
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+pGeo.setAttribute('aSize', new THREE.BufferAttribute(pSize, 1));
+pGeo.setAttribute('aAlpha', new THREE.BufferAttribute(pAlpha, 1));
+pGeo.setAttribute('aCol', new THREE.BufferAttribute(pCol, 3));
+pGeo.setAttribute('aKind', new THREE.BufferAttribute(pKind, 1));
+const partMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false,
+  uniforms: { uFoam: { value: TEX_FOAM }, uSplash: { value: TEX_SPLASH } },
+  vertexShader: `
+    attribute float aSize; attribute float aAlpha; attribute vec3 aCol; attribute float aKind;
+    varying float vA; varying vec3 vC; varying float vK;
+    void main(){
+      vA = aAlpha; vC = aCol; vK = aKind;
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = clamp(aSize * (250.0 / max(-mv.z, 0.001)), 2.0, 88.0);
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: `
+    uniform sampler2D uFoam; uniform sampler2D uSplash;
+    varying float vA; varying vec3 vC; varying float vK;
+    void main(){
+      vec2 uv = gl_PointCoord;
+      vec3 t = vK < 0.5 ? texture2D(uFoam, uv).rgb : texture2D(uSplash, uv).rgb;
+      float lum = dot(vC, vec3(0.4));
+      float a = dot(t, vec3(0.299, 0.587, 0.114)) * vA * 0.95 * lum;   // 輝度 = アルファ
+      if (a < 0.012) discard;
+      gl_FragColor = vec4(t * vC, a);
+    }`
+});
+const parts = new THREE.Points(pGeo, partMat);
+parts.frustumCulled = false;
+scene.add(parts);
+
+const pLife = new Float32Array(PMAX);
+const pGrav = new Float32Array(PMAX);
+function emit(n, x, y, z, spread, up, size, color, life, grav, kind = 0) {
+  for (let i = 0; i < n; i++) {
+    const h = pHead; pHead = (pHead + 1) % PMAX;
+    pPos[h * 3] = x + rand(-0.15, 0.15);
+    pPos[h * 3 + 1] = y;
+    pPos[h * 3 + 2] = z + rand(-0.15, 0.15);
+    pVel[h * 3] = rand(-spread, spread);
+    pVel[h * 3 + 1] = rand(up * 0.35, up);
+    pVel[h * 3 + 2] = rand(-spread, spread);
+    pSize[h] = size * rand(0.6, 1.5);
+    pAlpha[h] = 1;
+    pKind[h] = kind;
+    pLife[h] = life * rand(0.7, 1.3);
+    pGrav[h] = grav;
+    const c = color;
+    pCol[h * 3] = c[0]; pCol[h * 3 + 1] = c[1]; pCol[h * 3 + 2] = c[2];
+  }
+}
+const C_WATER = [0.95, 0.99, 1.0], C_FOAM = [0.85, 0.94, 1.0], C_DIRT = [0.55, 0.5, 0.44];
+const C_WAKE = [0.60, 0.66, 0.70];     // 航跡（色の明るさでアルファも落ちる）
+let waterLevel = 0;   // いまの水面高（パーティクル用）
+function updateParticles(dt) {
+  for (let i = 0; i < PMAX; i++) {
+    if (pAlpha[i] <= 0) continue;
+    pLife[i] -= dt;
+    if (pLife[i] <= 0) { pAlpha[i] = 0; continue; }
+    pVel[i * 3 + 1] -= pGrav[i] * dt;
+    pPos[i * 3] += pVel[i * 3] * dt;
+    pPos[i * 3 + 1] += pVel[i * 3 + 1] * dt;
+    pPos[i * 3 + 2] += pVel[i * 3 + 2] * dt;
+    if (pPos[i * 3 + 1] < waterLevel + 0.02) {   // 水面に当たったら弾ける
+      pPos[i * 3 + 1] = waterLevel + 0.02;
+      pVel[i * 3 + 1] *= -0.28;
+      pVel[i * 3] *= 0.7; pVel[i * 3 + 2] *= 0.7;
+      pLife[i] -= dt * 1.6;
+    }
+    pAlpha[i] = clamp(pLife[i] * 1.5, 0, 1);
+  }
+  pGeo.attributes.position.needsUpdate = true;
+  pGeo.attributes.aAlpha.needsUpdate = true;
+  pGeo.attributes.aSize.needsUpdate = true;
+  pGeo.attributes.aCol.needsUpdate = true;
+  pGeo.attributes.aKind.needsUpdate = true;
+}
+
+/* =========================================================================
+   11. 音（WebAudio 合成）
+   ========================================================================= */
+const Audio2 = (() => {
+  let ctx = null, master = null, riverGain = null, muted = false, noiseBuf = null;
+  function init() {
+    if (ctx) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain(); master.gain.value = 0.85; master.connect(ctx.destination);
+    // 川の音
+    const len = ctx.sampleRate * 2;
+    noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = last * 0.72 + w * 0.28; d[i] = last * 1.6; }
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.Q.value = 0.6;
+    riverGain = ctx.createGain(); riverGain.gain.value = 0.0;
+    src.connect(lp); lp.connect(riverGain); riverGain.connect(master); src.start();
+  }
+  function noise(dur, freq, q, gain, type = 'bandpass') {
+    if (!ctx || muted) return;
+    const s = ctx.createBufferSource(); s.buffer = noiseBuf;
+    s.playbackRate.value = rand(0.85, 1.15);
+    const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = ctx.createGain(); g.gain.setValueAtTime(gain, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+    s.connect(f); f.connect(g); g.connect(master);
+    s.start(); s.stop(ctx.currentTime + dur + 0.05);
+  }
+  function tone(freq, dur, gain, type = 'sine', slide = 0) {
+    if (!ctx || muted) return;
+    const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, ctx.currentTime);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), ctx.currentTime + dur);
+    const g = ctx.createGain(); g.gain.setValueAtTime(gain, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+    o.connect(g); g.connect(master);
+    o.start(); o.stop(ctx.currentTime + dur + 0.02);
+  }
+  return {
+    init, get on() { return !!ctx; },
+    setRiver(v) { if (riverGain) riverGain.gain.setTargetAtTime(muted ? 0 : v, ctx.currentTime, 0.15); },
+    toggle() {
+      muted = !muted;
+      if (master) master.gain.setTargetAtTime(muted ? 0 : 0.85, ctx.currentTime, 0.05);
+      return muted;
+    },
+    paddle() { noise(0.22, 1100, 1.2, 0.16); tone(320, 0.12, 0.05, 'sine', -140); },
+    splash() { noise(0.35, 2400, 0.9, 0.13); },
+    gate(combo) { tone(880 + Math.min(combo, 8) * 55, 0.13, 0.10, 'triangle'); tone(1320 + Math.min(combo, 8) * 60, 0.18, 0.06, 'sine'); },
+    rock() { noise(0.5, 320, 0.8, 0.42, 'lowpass'); tone(78, 0.42, 0.28, 'sine', -40); },
+    bank() { noise(0.3, 700, 0.7, 0.12, 'lowpass'); },
+    finish() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.4, 0.11, 'triangle'), i * 130)); },
+  };
+})();
+
+/* =========================================================================
+   12. 入力
+   ========================================================================= */
+const keys = {};
+const touchIn = { l: false, r: false, f: false };
+addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+  if (e.code === 'Space') {
+    if (state === 'title') startGame();
+    else if (state === 'result') startGame();
+  }
+  if (e.code === 'KeyR' && state !== 'title') startGame();
+  if (e.code === 'KeyM') Audio2.toggle();
+  if (e.code === 'KeyV') vrmStep(e.shiftKey ? -1 : 1);   // アバターの切替
+  if (e.code === 'KeyC') camMode = camMode === 0 ? 2 : camMode === 2 ? 1 : 0;   // 3人称 -> POV -> 正面
+});
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+// タッチ
+if ('ontouchstart' in window || navigator.maxTouchPoints > 0) document.getElementById('touch').classList.add('on');
+function bindTouch(id, prop) {
+  const el = document.getElementById(id);
+  const on = (e) => { e.preventDefault(); touchIn[prop] = true; };
+  const off = (e) => { e.preventDefault(); touchIn[prop] = false; };
+  el.addEventListener('touchstart', on, { passive: false });
+  el.addEventListener('touchend', off, { passive: false });
+  el.addEventListener('touchcancel', off, { passive: false });
+  el.addEventListener('mousedown', on); el.addEventListener('mouseup', off); el.addEventListener('mouseleave', off);
+}
+bindTouch('t-l', 'l'); bindTouch('t-r', 'r'); bindTouch('t-f', 'f');
+
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('retry-btn').addEventListener('click', startGame);
+document.getElementById('to-title-btn').addEventListener('click', backToTitle);
+
+/* =========================================================================
+   13. ゲーム状態
+   ========================================================================= */
+let state = 'title';         // title / ready / play / finish / result
+  let camMode = 0;             // 0: 3人称（チェイス）, 1: 正面（船の前方から顔）, 2: 一人称（POV）／C で 0→2→1→0 と巡回
+let P = { z: CFG.startZ, s: 0, vs: 0, v: CFG.speedBase, roll: 0, stroke: 0, strokeSide: 0, invuln: 0, flow: 0 };
+let score = 0, combo = 1, bestCombo = 0, gatesCleared = 0, perfects = 0, timeS = 0;
+let camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+// 一人称視点用（目のパドラー本体座標の位置）
+// パドラー（櫂）の高さ。肩の目標高として使う
+const PADDLE_Y = 0.89;
+
+// VRM アバターの大きさ倍率。
+// VRM は頭身大のデフォルメ体型なので、艇（幅 0.66m）に対して小さく見える。
+// 実物のカヤッカーが船に占める存在感に近づけるため 1.3 倍にしてある。
+// 1.0 = 従来。手が櫂に届かない/front の心配はない
+//（need/reach は拡大するほど余裕が増えるので、grip の自動縮小も止まる）。
+const VRM_SIZE = 1.3;
+
+const POV_EYE = new THREE.Vector3(0, 1.30, 0.46);
+const POV_Q = new THREE.Quaternion(), POV_EUL = new THREE.Euler(), POV_F = new THREE.Vector3();
+let shake = 0, shakeDecay = 3.2;
+let titleT = 0;
+let readyT = 0;
+
+const el = {
+  score: document.getElementById('score'), combo: document.getElementById('combo'),
+  time: document.getElementById('time'), gates: document.getElementById('gates'),
+  fill: document.getElementById('prog-fill'), icon: document.getElementById('prog-icon'),
+  remain: document.getElementById('remain'), popups: document.getElementById('popups'),
+  vig: document.getElementById('vig'), spdv: document.getElementById('spdv'), spdbar: document.getElementById('spdbar'),
+  curdot: document.getElementById('curdot'),
+  cd: document.getElementById('countdown'),
+};
+
+function popup(text, cls = '', sub = '') {
+  const d = document.createElement('div');
+  d.className = 'popup ' + cls;
+  d.innerHTML = text + (sub ? `<small>${sub}</small>` : '');
+  el.popups.appendChild(d);
+  setTimeout(() => d.remove(), 1050);
+}
+
+function resetRun() {
+  P.z = CFG.startZ; P.s = 0; P.vs = 0; P.v = CFG.speedBase; P.roll = 0;
+  P.stroke = 0; P.strokeSide = 0; P.invuln = 0;
+  score = 0; combo = 1; bestCombo = 0; gatesCleared = 0; perfects = 0; timeS = 0;
+  shake = 0;
+  for (const g of gates) g.passed = false;
+  for (let i = 0; i < PMAX; i++) pAlpha[i] = 0;
+  resetCamera();
+}
+
+// 開始時のカメラを「その場の進行方向」で最初から正しく据える
+// （回転も注視点も未初期化だと、スタート直後だけ斜めの角度を向いてしまう）
+function resetCamera() {
+  const px = cx(P.z) + P.s;
+  const yaw = boatYaw();
+  const back = 4.9 + P.v * 0.105, fwd = 9.5;
+  camPos.set(
+    px + Math.sin(yaw) * back,
+    riverY(P.z) + 1.75 + P.v * 0.022,
+    P.z + Math.cos(yaw) * back
+  );
+  camLook.set(px - Math.sin(yaw) * fwd, riverY(P.z - fwd) + 0.85, P.z - Math.cos(yaw) * fwd);
+  camera.position.copy(camPos);
+  camera.lookAt(camLook);
+}
+
+function applyDiff(key) {
+  diffKey = key;
+  DIFF = DIFFS[key];
+  CFG.curvK = DIFF.curvK;
+  CFG.eddyK = DIFF.eddyK;
+  CFG.PTS.rock = DIFF.rockPts;
+  CFG.rockRScale = DIFF.rockR;
+  // 旗の間隔を難易度で実際に変える（HARD は旗が近くて狭い）
+  for (const g of gates) {
+    g.half = g.halfBase * DIFF.gateScale;
+    for (const f of g.flags) {
+      const side = f.grp.userData.side;
+      f.grp.position.x = cx(g.z) + g.s + side * g.half;
+    }
+  }
+  applyDiffNote();
+  document.querySelectorAll('#diffsel button').forEach((b) => b.classList.toggle('on', b.dataset.d === key));
+}
+document.querySelectorAll('#diffsel button').forEach((b) => {
+  b.addEventListener('click', () => { applyDiff(b.dataset.d); resetRun(); });
+});
+
+function startGame() {
+  Audio2.init();
+  document.getElementById('title').classList.add('hidden');
+  document.getElementById('result').classList.add('hidden');
+  resetRun();
+  state = 'ready';
+  readyT = 1.5;
+  el.cd.classList.remove('hidden');
+  el.cd.textContent = 'READY';
+  el.cd.style.fontSize = '80px';
+  el.vig.style.opacity = 0;
+}
+
+function finishGame() {
+  state = 'result';
+  const rank = score >= 6000 ? 'S' : score >= 4400 ? 'A' : score >= 3000 ? 'B' : 'C';
+  document.getElementById('result-rank').textContent = rank;
+  document.getElementById('result-score').textContent = String(score);
+  resultState = { cleared: gatesCleared, total: totalGates(), perfect: perfects,
+                  combo: bestCombo, time: timeS.toFixed(1) };
+  renderResult();
+  document.getElementById('result').classList.remove('hidden');
+  Audio2.setRiver(0.05);
+}
+
+// リザルト画面からタイトル画面へ戻る
+// （難易度やアバターを変更したいとき用。タイトルは操作説明と开局設定を出し直す）
+function backToTitle() {
+  document.getElementById('result').classList.add('hidden');
+  document.getElementById('title').classList.remove('hidden');
+  resetRun();
+  state = 'title';
+  el.cd.classList.add('hidden');
+  el.vig.style.opacity = 0;
+  Audio2.setRiver(0.05);
+}
+
+/* =========================================================================
+   14. 物理 / 更新
+   ========================================================================= */
+const paddleTip = new THREE.Vector3();
+const bladeWorldTip = new THREE.Vector3();
+function inputAxis() {
+  let a = 0;
+  if (keys['KeyA'] || keys['ArrowLeft'] || touchIn.l) a -= 1;
+  if (keys['KeyD'] || keys['ArrowRight'] || touchIn.r) a += 1;
+  return a;
+}
+function inputFwd() {
+  return !!(keys['KeyW'] || keys['ArrowUp'] || touchIn.f);
+}
+
+function updatePlay(dt, t) {
+  const axis = inputAxis();
+  const fwd = inputFwd();
+  const wantStroke = axis !== 0 ? Math.sign(axis) : (fwd ? 0.5 : 0);
+
+  // --- 櫂（ストローク） ---
+  if (wantStroke !== 0) {
+    // キーを押しても即座に動かない。わずかな遅れを置いて「重み」を出す
+    if (P.stroke <= 0) {
+      if (pendingSide !== wantStroke) { pendingSide = wantStroke; lagT = CFG.strokeLag; }
+      if (lagT > 0) lagT -= dt;
+      else { P.stroke = 1; P.strokeSide = wantStroke; P.strokeT = 0; P.splashed = false; }
+    }
+    const rate = P.strokeSide === 0.5 ? CFG.strokeRateFwd : CFG.strokeRate;
+    if (P.stroke) P.strokeT += dt * rate;
+    const side = P.strokeSide > 0 ? 1 : -1;
+    // 刃が水に入っているフェーズだけ推力（瞬間パルスではなく滑らかに引き切る）
+    const win0 = 0.30, win1 = win0 + CFG.strokeWin;
+    if (P.stroke && P.strokeT > win0 && P.strokeT < win1) {
+      const acc = (P.strokeSide === 0.5 ? CFG.strokeFwd : CFG.strokeLat) / (CFG.strokeWin / rate);
+      if (P.strokeSide === 0.5) P.v = Math.min(P.v + acc * dt, CFG.speedMax);
+      else P.vs += side * acc * dt;
+    }
+    if (P.stroke && P.strokeT > win0 && !P.splashed) {     // 刃が水を叩く瞬間
+      P.splashed = true;
+      kayak.updateMatrixWorld(true);
+      if (P.strokeSide === 0.5) {
+        bladeWorld(1, false); bladeWorld(-1, false);
+        emit(14, bladeWorldTip.x, Math.max(waterLevel + 0.05, bladeWorldTip.y), bladeWorldTip.z, 1.6, 2.4, 1.7, C_WATER, 0.5, 9, 0);
+      } else {
+        bladeWorld(side, true);
+      }
+      Audio2.paddle();
+    }
+    if (P.stroke && P.strokeT >= 1) {
+      P.stroke = 0; P.strokeT = 0; P.splashed = false;
+      if (P.strokeSide !== 0.5) Audio2.splash();
+    }
+  } else {
+    P.strokeT = 0; P.splashed = false;
+    if (P.stroke) P.stroke = 0;              // キーから手を離したら中断
+    pendingSide = 0;
+  }
+
+  // --- 縦方向（流れ） ---
+  const progN = clamp((CFG.startZ - P.z) / (CFG.startZ - CFG.goalZ), 0, 1);
+  // 段差の落下中は斜面に従って加速する
+  const dzSlope = (riverY(P.z - 1.7) - riverY(P.z + 1.7)) / 3.4;
+  const targetV = CFG.speedBase + CFG.speedGain * Math.pow(progN, 0.75)
+                + (fwd ? 2.6 : 0) + clamp(dzSlope, 0, 0.6) * 7;
+  P.v = damp(P.v, targetV, 0.55, dt);
+  const prevZ = P.z;
+  P.z -= P.v * dt;
+
+  // --- 横方向（流れに流される） ---
+  const cx2v = cx2(P.z);
+  const eddy = (Math.sin(P.z * 0.021 + t * 0.75) * 0.6 + Math.sin(P.z * 0.0072 - t * 0.5) * 0.45) * CFG.eddyK;
+  P.flow = CFG.curvK * P.v * P.v * cx2v + eddy;      // いま押されている向きと強さ
+  P.vs += P.flow * dt;
+  P.vs *= Math.exp(-CFG.dragLat * dt);
+
+  // --- 岸 ---
+  const hw = halfW(P.z);
+  const edge = hw - CFG.kayakR;
+  if (Math.abs(P.s) > edge) {
+    const over = Math.abs(P.s) - edge;
+    P.s = Math.sign(P.s) * edge;
+    P.vs = -P.vs * 0.28;
+    P.v *= Math.exp(-1.2 * dt);       // 岸をすれすれだと減速
+    if (over > 0.001 && t - lastBankT > 0.6) {
+      lastBankT = t; Audio2.bank();
+      emit(8, cx(P.z) + P.s, waterLevel + 0.1, P.z, 1.6, 2.0, 4, C_WATER, 0.6, 9);
+      popup(tr('岸！', 'SHORE!'), 'miss');
+    }
+  }
+  P.s += P.vs * dt;
+  P.s = clamp(P.s, -hw + 0.2, hw - 0.2);
+
+  // --- 岩との衝突 ---
+  if (P.invuln <= 0) {
+    const px = cx(P.z) + P.s;
+    for (const r of rocks) {
+      if (r.z < P.z - 12 || r.z > P.z + 12) continue;
+      const dx = px - r.x, dz = P.z - r.z;
+      const d = Math.hypot(dx, dz);
+      const rr = r.r * CFG.rockRScale + CFG.kayakR;
+      if (d < rr) {
+        const nx = dx / (d || 1), nz = dz / (d || 1);
+        P.s = r.x - cx(P.z) + nx * rr * 1.02;
+        P.z = r.z - nz * rr * 1.02;
+        // 必ず横へ弾かれる（真正面衝突でも）「跳ね返った」手応えを確実に出す
+        const lat = P.s - (r.x - cx(P.z));
+        P.vs += (lat >= 0 ? 1 : -1) * 4.4;
+        P.v *= 0.70; P.z += 1.1;                 // 跳ね返る
+        P.invuln = 1.15;
+        combo = 1;
+        score = Math.max(0, score + CFG.PTS.rock);
+        shake = 1.0;
+        el.vig.style.opacity = 0.85;
+        Audio2.rock();
+        emit(30, cx(P.z) + P.s, waterLevel + 0.35, P.z, 4.4, 5.6, 3.6, C_WATER, 1.0, 11, 1);
+        emit(26, cx(P.z) + P.s, waterLevel + 0.5, P.z, 2.6, 3.4, 2.6, C_WATER, 1.2, 9, 0);
+        emit(14, cx(P.z) + P.s, waterLevel + 0.5, P.z, 2.4, 3.0, 6, C_DIRT, 1.2, 9, 0);
+        popup(`${CFG.PTS.rock}`, 'bad', tr('岩に衝突！', 'Hit a rock!'));
+        break;
+      }
+    }
+  }
+  P.invuln = Math.max(0, P.invuln - dt);
+
+  // --- 旗ゲート ---
+  for (const g of gates) {
+    if (g.passed) continue;
+    if (prevZ > g.z && P.z <= g.z) {
+      g.passed = true;
+      const off = Math.abs(P.s - g.s);
+      if (off < g.half * DIFF.gateTol + 0.6) {       // 浮体の幅ぶんは甘くする
+        const perfect = off < g.half * 0.30 * DIFF.gateTol;
+        combo = Math.min(combo + 1, 20);
+        bestCombo = Math.max(bestCombo, combo);
+        gatesCleared++;
+        if (perfect) perfects++;
+        const pts = (perfect ? CFG.PTS.perfect : CFG.PTS.gate) + (combo - 1) * 15;
+        score += pts;
+        // 水しぶき
+        const wx = cx(g.z) + g.s, y = riverY(g.z) + 0.15;
+        emit(perfect ? 24 : 14, wx, y, g.z, 3.4, 4.6, 3.0, C_WATER, 0.9, 10, 1);
+        emit(perfect ? 24 : 14, wx, y, g.z, 1.8, 2.8, 2.3, C_FOAM, 0.75, 8, 0);
+        Audio2.gate(combo);
+        popup(`+${pts}`, perfect ? 'big' : '', perfect ? 'PERFECT!' : `COMBO ×${combo}`);
+      } else {
+        combo = 1;
+        popup('MISS', 'miss', tr('旗の間を通れなかった', 'Missed the gate'));
+      }
+    }
+  }
+
+  // --- 航跡（船尾の泡） ---
+  wakeAcc += dt * (16 + P.v * 1.6);
+  while (wakeAcc >= 1) {
+    wakeAcc -= 1;
+    emit(1, cx(P.z) + P.s + rand(-0.35, 0.35), waterLevel + 0.04, P.z + 1.6 + rand(-0.4, 0.6), 0.5, 0.7 + P.v * 0.03, 1.2 + P.v * 0.02,
+         C_WAKE, 1.1, 4, 0);
+  }
+
+  // --- 段差：lip の飛沫と、下の泡 ---
+  for (const d of DROPS) {
+    const dz = d.z - P.z;                      // 0 なら lip の位置
+    // lip の手前：手前に立つ白いカーテン
+    if (dz > -2 && dz < d.w + 3 && Math.random() < 0.85) {
+      const t2 = rand(0, 1);
+      emit(3, cx(d.z + rand(-3, 3)) + rand(-halfW(d.z) * 0.8, halfW(d.z) * 0.8),
+           waterLevel + rand(0.05, 0.6), d.z + rand(-1, d.w * 0.6), 1.6, 2.0 + t2 * 3.0, 0.9, C_FOAM, 0.8, 7, 0);
+    }
+    // 落下先：立ちのぼる飛沫と崩れる泡
+    if (dz > d.w && dz < 40) {
+      const k = 1 - dz / 40;
+      if (Math.random() < 0.5 * k) {
+        emit(2, cx(P.z) + rand(-halfW(P.z) * 0.9, halfW(P.z) * 0.9), waterLevel + rand(0.05, 0.6),
+             P.z + rand(-2, 6), 2.0, 1.6 + P.v * 0.12, 0.85, C_FOAM, 1.0, 7, 0);
+      }
+    }
+  }
+
+// --- ゴールの桟橋 ---
+  if (P.z <= CFG.goalZ + 1.5) {
+    P.z = CFG.goalZ + 1.5;
+    state = 'finish';
+    finishT = 0;
+    Audio2.finish();
+    popup('GOAL!', 'big');
+  }
+
+  timeS += dt;
+  P.roll = damp(P.roll, clamp(-P.vs * 0.075, -0.42, 0.42), 0.002, dt);
+}
+
+let lastBankT = -9;
+let finishT = 0;
+let wakeAcc = 0;
+let pendingSide = 0;        // 入力待ちの櫂（side）
+let lagT = 0;               // キーに反応して櫂が動き出すまでの残り時間
+let strokeSideSigned = 0;   // 直近に漕いだ側（中断時に復帰に使う）
+
+function updateFinish(dt, t) {
+  finishT += dt;
+  // 桟橋の手前へ滑って停止
+  P.v = damp(P.v, 0, 0.02, dt);
+  P.z = Math.max(CFG.goalZ + 7.0, P.z - P.v * dt);
+  P.s = damp(P.s, -2.0, 0.4, dt);
+  P.vs = damp(P.vs, 0, 0.001, dt);
+  P.roll = damp(P.roll, 0, 0.01, dt);
+  if (Math.random() < 0.5) {
+    emit(1, cx(P.z) + P.s + rand(-0.7, 0.7), waterLevel + 0.1, P.z, 0.5, 1.4, 3.5, C_WATER, 0.5, 8);
+  }
+  if (finishT > 2.4) finishGame();
+}
+
+/* =========================================================================
+   15. キャラクター / 演出の更新
+   ========================================================================= */
+function bladeWorld(side, splash) {
+  // 刃の位置（パドル空間の X 軸）をワールド座標へ
+  paddleTip.set(side * 1.16, -0.02, 0).applyMatrix4(paddler.userData.paddle.matrixWorld);
+  bladeWorldTip.copy(paddleTip);
+  if (splash) {
+    emit(16, paddleTip.x, Math.max(waterLevel + 0.05, paddleTip.y), paddleTip.z, 1.7, 2.6, 1.8, C_WATER, 0.5, 9, 0);
+  }
+}
+
+function alignCylinder(mesh, a, b) {
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const len = dir.length();
+  mesh.position.copy(a);
+  mesh.scale.set(1, len, 1);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+}
+
+// 腕を肩→肘→手首の3本に分けて張る。肘を線分より下・外へ張り出すことで
+// 「棒に手が生えた」印象になり、 POW でも腕だと認識できる
+const _ad = new THREE.Vector3(), _ae = new THREE.Vector3();
+function poseArm(arm, s, h) {
+  _ad.subVectors(h, s);
+  const L = Math.max(0.05, _ad.length());
+  _ae.copy(s).addScaledVector(_ad, 0.46);            // 肘は線分より手先寄り
+  _ae.y -= L * 0.17;                                  // 自然に肘が落ちる
+  _ae.x += (_ae.x - s.x >= 0 ? 1 : -1) * L * 0.05;    // わずかに外へ広げる
+  alignCylinder(arm.up, s, _ae);
+  alignCylinder(arm.fo, _ae, h);
+  arm.shoulder.position.copy(s);
+  arm.hand.position.copy(h);
+  arm.hand.quaternion.copy(arm.fo.quaternion);
+}
+
+// 一人称では胴も肩も隠しているので、肩・上腕をそのまま出すと
+// 「宙に浮いた根元」になる。そこで肘をカメラの
+// 後方に退避させ、前臂と手だけを画面の端から入れさせる
+// 実際のカヤッキングでは上腕は目の後ろにあっても、
+// 画面には入らない。そこで肘をカメラ後方に置き、
+// 前臂と手だけを画面の端から入れさせる（上臂・肩は非表示）
+const POV_ELBOW = new THREE.Vector3(0.34, 0.80, 0.80);
+function poseArmPOV(arm, side, h) {
+  _ae.set(side * POV_ELBOW.x, POV_ELBOW.y, POV_ELBOW.z);
+  alignCylinder(arm.fo, _ae, h);
+  arm.up.visible = false;
+  arm.shoulder.visible = false;
+  arm.hand.position.copy(h);
+  arm.hand.quaternion.copy(arm.fo.quaternion);
+}
+
+// --- パドルのポーズ計算 ----------------------------------------------------
+// 実際のカヤッキングは ①キャッチ（前から入れる）②パワー（後ろへ引く）
+// ③リカバー（刃を抜いて次へ戻す）の3つ。スイッチのように往復させず回転で繋ぐ。
+const PH_CATCH = 0.30, PH_POWER = 0.68;
+const pose = { roll: 0.34, yaw: -0.22, twist: 0, depth: 0 };      // 現在の角度（バネで追従）
+const poseT = { roll: 0, yaw: 0, twist: 0, depth: 0 };            // 目標角度
+function setPoseTarget(s, p) {
+  let yaw, roll, twist, depth;
+  if (p < PH_CATCH) {                       // ① キャッチ：刃を前へ滑らせながら入れる
+    const u = smoothstep(0, 1, p / PH_CATCH);
+    yaw = lerp(-0.52, 0.10, u);
+    roll = lerp(0.42, -0.95, u);
+    twist = lerp(0.06, 0.34, u);
+    depth = u;
+  } else if (p < PH_POWER) {                // ② パワー：水につけたまま後ろへ引き切る
+    const u = smoothstep(0, 1, (p - PH_CATCH) / (PH_POWER - PH_CATCH));
+    yaw = lerp(0.10, 0.86, u);
+    roll = lerp(-0.95, -0.80, u);
+    twist = lerp(0.34, -0.16, u);
+    depth = 1 - u * 0.18;
+  } else {                                  // ③ リカバー：刃を抜き、次キャッチへ回す
+    const u = smoothstep(0, 1, (p - PH_POWER) / (1 - PH_POWER));
+    yaw = lerp(0.86, -0.52, u);
+    roll = lerp(-0.80, 0.42, u);
+    twist = lerp(-0.16, 0.06, u);
+    depth = (1 - u) * 0.55;
+  }
+  // s=+1（右）で漕ぐとき：刃は下（roll が負）かつ 前→後（yaw が負→正）
+  poseT.roll = s * roll;
+  poseT.yaw = -s * yaw;
+  poseT.twist = s * twist;
+  poseT.depth = depth;
+  pose.side = s;
+}
+
+// 船の向き。カメラもこれに揃えるので、画面の中で船は必ず正立して中心に来る。
+// 流れは z が減る向きに x も動く（dx/dd = -cx1）ので、船首は +cx1 側の向きを向く。
+// 符号を逆にすると「流れは左・船首は右」になる
+function boatYaw() {
+  return Math.atan2(cx1(P.z), 1) * 0.65 + clamp(-P.vs * 0.05, -0.35, 0.35);
+}
+function updateKayak(dt, t) {
+  const px = cx(P.z) + P.s;
+  const yaw = boatYaw();
+
+  // --- パドルは目標ポーズへ減衰追従（操作へのラグと重さが出る） ---
+  const pd = paddler.userData;
+
+  if (P.stroke) {
+    const s = P.strokeSide === 0.5 ? (P.strokeT < 0.5 ? 1 : -1) : Math.sign(P.strokeSide);
+    setPoseTarget(s, P.strokeT);
+  } else {
+    // 待機：オールは水平に構え、わずかに揺れるだけ（傾けたまま止まると不自然）
+    poseT.roll = Math.sin(t * 1.1) * 0.035;
+    poseT.yaw = -0.10 + Math.sin(t * 0.8) * 0.06;
+    poseT.twist = 0;
+    poseT.depth = 0;
+    pose.side = strokeSideSigned || 1;
+  }
+  const kf = P.stroke ? 0.00001 : 0.0003;      // ストローク中は追いつく、戻りはゆっくり
+  pose.roll = damp(pose.roll, poseT.roll, kf, dt);
+  pose.yaw = damp(pose.yaw, poseT.yaw, kf, dt);
+  pose.twist = damp(pose.twist, poseT.twist, kf, dt);
+  pose.depth = damp(pose.depth, poseT.depth, kf, dt);
+
+  pd.paddle.rotation.set(0.11, pose.yaw, pose.roll);
+  // 待機時は支点を落として、水平のオールを自然に腰の高さに構える（腕が横に開くのを防止）
+  // パワーフェーズでは櫂を走らせない（肩より 25cm 上に上げると腕が届かない）
+  // 上下差は櫂の傾き（ロール）で作るので、櫂自体は高くしない
+  pd.paddle.position.y = lerp(0.84, 0.90, pose.depth);
+  // 上体：漕ぐ側へ傾き、ひねり、引くほど前へ込む
+  pd.torsoPivot.rotation.set(0.06 + pose.depth * 0.16, pose.twist * 0.55, -pose.side * (0.10 + pose.depth * 0.26));
+
+  // カヤック：漕ぐともよにロールし、引く瞬間に前へ沈む
+  const strokeRoll = -pose.side * pose.depth * 0.055;
+  // 水面勾配を追って前後に傾く。サンプルを短くすると lip の直前で急激に沈む
+  const slope = (riverY(P.z - 1.7) - riverY(P.z + 1.7)) / 3.4;
+  // 船体は水下に沈める（0.39m）。船底の上端が水面上 0.02m になる深さなので、
+  // 見えるのは水線のごく細い帯だけ。色はデッキより少し濃い黄色で、目は立たせない。
+  kayak.position.set(px, riverY(P.z) - 0.39 + Math.sin(t * 2.1) * 0.05 - P.v * 0.004, P.z);
+  kayak.rotation.set(
+    Math.sin(t * 1.7) * 0.02 - 0.02 - pose.depth * 0.035 + clamp(slope, -0.6, 0.6) * 1.05,
+    yaw,
+    P.roll + strokeRoll + Math.sin(t * 1.3) * 0.015
+  );
+
+  // 被弾の揺れ
+  const sh = shake;
+  pd.paddle.rotation.z += rand(-sh, sh) * 0.35;
+  pd.torsoPivot.rotation.x += rand(-sh, sh) * 0.3;
+
+  // 腕をパドルの柄に追従（パドラー空間 = カヤック空間で計算）
+  // 握り間隔は実物どおり中央寄り。±0.72 だと羽根の近くを掴んで見えて腕も伸びすぎる
+  const handR = new THREE.Vector3(0.52, 0, 0).applyQuaternion(pd.paddle.quaternion).add(pd.paddle.position);
+  const handL = new THREE.Vector3(-0.52, 0, 0).applyQuaternion(pd.paddle.quaternion).add(pd.paddle.position);
+  const shR = new THREE.Vector3(0.23, 1.02, 0.26).applyEuler(pd.torsoPivot.rotation).add(pd.torsoPivot.position);
+  const shL = new THREE.Vector3(-0.23, 1.02, 0.26).applyEuler(pd.torsoPivot.rotation).add(pd.torsoPivot.position);
+  if (camMode === 2) {
+    poseArmPOV(pd.armR, 1, handR);
+    poseArmPOV(pd.armL, -1, handL);
+  } else {
+    pd.armR.up.visible = pd.armR.shoulder.visible = true;
+    pd.armL.up.visible = pd.armL.shoulder.visible = true;
+    poseArm(pd.armR, shR, handR);
+    poseArm(pd.armL, shL, handL);
+  }
+}
+
+/* =========================================================================
+   16. カメラ
+   ========================================================================= */
+function updateCamera(dt, t) {
+  const px = cx(P.z) + P.s;
+  const yaw = boatYaw();          // 船と同じ軸。画角の中で船がズレない
+  let desired, look;
+  if (camMode === 0) {
+    // 水面すれすれ・近距離。スピード感を出すため高速ほど寄る
+    const back = 4.9 + P.v * 0.105, fwd = 9.5;
+    // 段差ではハイカメラを寄せて持ち上げ、落下して来る船を見下ろす
+    const cSlope = (riverY(P.z - 1.7) - riverY(P.z + 1.7)) / 3.4;
+    const dive = clamp(cSlope, -0.6, 0.6) * 2.4;
+    const cb = back - dive * 1.2;                       // 実際に後方へ引く距離
+    // 高さは「カメラ自身の位置」の水面を基準にする（艇の位置だと段差で水面下に沈む）
+    const cz = P.z + Math.cos(yaw) * cb;
+    const wy = riverY(cz), wl = riverY(P.z - fwd);
+    desired = new THREE.Vector3(
+      px + Math.sin(yaw) * cb,
+      Math.max(wy + 1.75 + P.v * 0.022 + dive * 1.5, wy + 0.75),
+      cz
+    );
+    look = new THREE.Vector3(
+      px - Math.sin(yaw) * fwd, wl + 0.85 - dive * 0.8, P.z - Math.cos(yaw) * fwd
+    );
+  } else if (camMode === 2) {
+    // 一人称。頭の位置から船の軸そのまま見るので、段差では一緒に沈む
+    const q = kayak.quaternion;
+    // カメラの高さはモデルの頭に合わせてある（VRM.povEyeY）。
+    // 頭が大きいモデルで視界を塞がないようにするため。
+    _ik.t2.set(POV_EYE.x, VRM.povEyeY, POV_EYE.z);
+    desired = _ik.t2.applyQuaternion(q).add(kayak.position);
+    POV_Q.setFromEuler(POV_EUL.set(-0.12, 0, 0));          // 少し伏せて船首を画面下に入れる
+    POV_Q.multiply(q);
+    look = desired.clone().addScaledVector(POV_F.set(0, 0, -1).applyQuaternion(POV_Q), 12);
+  } else {
+    // 正面：GoPro 風。水面すれすれの低い位置から小さく見上げる。
+    // 下流のゲートは画面に入らないので、アバターの顔を見せる観点として使う。
+    const D = 2.6;                          // 船の前方への距離
+    const cz = P.z - Math.cos(yaw) * D;     // 船の前方（- 方向へ流れる）
+    const cxx = px - Math.sin(yaw) * D;
+    const oy = riverY(cz);                  // カメラ自体の水面を基準にする
+    const side = 0.40 + Math.sin(t * 0.21) * 0.15;   // 少し横にずれて少ない角にする
+    desired = new THREE.Vector3(
+      cxx + Math.cos(yaw) * side,
+      // カメラは船より下流側にあるので、その場所の水位は低くなる。
+      // 水位を船の水位に合わせてからに、段差で天を見上することがない。
+      // 下流側の水位は船より低いので、永に水面上になる。
+      Math.max(oy + 0.34, riverY(P.z) + 0.34),
+      cz - Math.sin(yaw) * side
+    );
+    // 注視点はアバターの頭。モデルで頭の高さが異なるので、実際の頭ボーンの位置を使う。
+    if (VRM.loaded && VRM.bones && VRM.bones.head) {
+      VRM.bones.head.getWorldPosition(_ik.t0);
+      look = _ik.t0.clone();
+    } else {
+      look = new THREE.Vector3(px, riverY(P.z) + 0.88, P.z);
+    }
+  }
+  // 一人称は「頭の少し後ろ」からの追従にしておく。完全に固定すると
+// カメラが目の位置 (−0.10m 前) に張り付き、パドルが 0.1m 先に来る
+// 手の位置が画角 (±44°) を完全に外れて見えなくなる
+  // 正面カメラは船に向けてきるので、追従遅延が距離に響く。
+  // そのため横に決めて固定する。
+  const camK = camMode === 2 ? 2e-6 : camMode === 1 ? 0 : 8e-4;
+  // camK = 0 のとき Math.pow(0, dt) は dt>0 なら 0、dt=0 なら 1 になる。
+  // 係数が負や ±Infinity になると lerp が NaN になるので、必ず 0..1 に収める。
+  // 正面（camMode 1）は「追従を固定」したいので係数を 1 にする。
+  let camA = camMode === 1 ? 1 : 1 - Math.pow(camK, dt);
+  if (!(camA >= 0)) camA = 0;
+  if (camA > 1) camA = 1;
+  camPos.lerp(desired, camA);
+  camLook.lerp(look, camA);
+  // 一人称では頭・胴が視界を塞ぐので隠す（腕とパドルは残す）
+  if (paddler.userData.torsoPivot) paddler.userData.torsoPivot.visible = camMode !== 2;
+  // コクピットは一人称でも見せる。
+  // 非表示にすると「水上に浮いたアバター」に見せかけ、体幹が途切れて不自然になる。
+  if (kayak.userData.cock) kayak.userData.cock.visible = true;
+
+  // 速度に応じた微細なゆらぎ（水面と樹木の水平感）
+  if (camMode === 0) {
+    const sp = clamp(P.v / 20, 0, 1);
+    camPos.y += Math.sin(t * 21.3) * 0.045 * sp + Math.sin(t * 8.1) * 0.03 * sp;
+    camPos.x += Math.sin(t * 5.7) * 0.035 * sp;
+    camLook.y += Math.sin(t * 13.1) * 0.05 * sp;
+  }
+
+  // 被弾シェイク
+  if (shake > 0.001) {
+    camPos.x += rand(-shake, shake) * 0.85;
+    camPos.y += rand(-shake, shake) * 0.6;
+    camPos.z += rand(-shake, shake) * 0.5;
+  }
+  if (window.__camDbg) window.__camDbg = { mode: camMode, yaw: yaw, px: px,
+    desired: desired.toArray(), look: look.toArray(),
+    camPos: camPos.toArray(), camLook: camLook.toArray(),
+    pz: P.z, ps: P.s, pv: P.v, pvs: P.vs };
+  camera.position.copy(camPos);
+  camera.lookAt(camLook);
+  // 速いほど画角を広げてスピード感を出す（一人称は少し広め）
+  const fov = (camMode === 2 ? 82 : camMode === 1 ? 88 : 61)
+  camera.fov = damp(camera.fov, fov, 0.2, dt);
+  // 一人称はパドルや腕が至近にあるのでニアクリップを寄せる
+  const near = camMode === 2 ? 0.05 : 0.3;
+  if (camera.near !== near) { camera.near = near; }
+  camera.updateProjectionMatrix();
+  if (shake > 0) { shake = Math.max(0, shake - shakeDecay * dt); el.vig.style.opacity = Math.max(0, parseFloat(el.vig.style.opacity || 0) - dt * 2.2); }
+}
+
+function updateTitleCamera(dt, t) {
+  titleT += dt;
+  const z = CFG.startZ - 70 - (titleT * 9) % 420;
+  const px = cx(z) + Math.sin(t * 0.25) * 5;
+  camPos.set(px + 12, riverY(z) + 7.5, z + 16);
+  camLook.set(px, riverY(z) + 0.6, z - 10);
+  camera.position.copy(camPos);
+  camera.lookAt(camLook);
+  camera.fov = damp(camera.fov, 55, 0.2, dt);
+  camera.updateProjectionMatrix();
+}
+
+/* =========================================================================
+   17. 影 / 水面の泡 / HUD
+   ========================================================================= */
+function updateSunAndWater() {
+  const px = cx(P.z) + P.s;
+  sun.position.set(px + sunDir.x * 70, sunDir.y * 70, P.z + sunDir.z * 70);
+  sun.target.position.set(px, 0, P.z);
+  sun.target.updateMatrixWorld();
+
+  // 近くの岩を泡リングに渡す
+  const near = rocks
+    .filter((r) => Math.abs(r.z - P.z) < 90)
+    .sort((a, b) => Math.abs(a.z - P.z) - Math.abs(b.z - P.z))
+    .slice(0, MAX_FOAM_ROCKS);
+  for (let i = 0; i < MAX_FOAM_ROCKS; i++) {
+    const v = waterU.uRockA.value[i];
+    if (i < near.length) v.set(near[i].x, near[i].z, near[i].r, 0);
+    else v.set(0, 0, -1, 0);
+  }
+}
+
+function updateFlags(t) {
+  for (const g of gates) {
+    for (const f of g.flags) {
+      const s = Math.sin(t * 1.9 + f.phase);
+      f.grp.position.y = riverY(f.grp.position.z) + 0.05 + s * 0.11;
+      f.grp.rotation.z = Math.sin(t * 1.5 + f.phase) * 0.17;
+      f.cloth.rotation.y = Math.sin(t * 8 + f.phase) * 0.5;
+      f.cloth.rotation.z = Math.sin(t * 6.5 + f.phase * 1.7) * 0.22;
+    }
+  }
+}
+
+function updateHUD() {
+  el.score.textContent = String(score);
+  el.time.textContent = timeS.toFixed(1);
+  el.gates.textContent = `GATE ${gatesCleared} / ${totalGates()}`;
+  el.combo.textContent = `COMBO ×${combo}`;
+  el.combo.classList.toggle('on', combo > 1);
+  const p = clamp((CFG.startZ - P.z) / (CFG.startZ - CFG.goalZ), 0, 1);
+  el.fill.style.width = (p * 100).toFixed(1) + '%';
+  el.icon.style.left = (p * 100).toFixed(1) + '%';
+  el.remain.textContent = String(Math.max(0, Math.round(P.z - CFG.goalZ)));
+  el.spdv.textContent = String(Math.round(P.v * 3.6));
+  el.spdbar.style.width = clamp((P.v / CFG.speedMax) * 100, 0, 100) + '%';
+  // 流れに押される向きと強さ
+  const f = clamp((P.flow || 0) / 1.2, -1, 1);
+  el.curdot.style.left = (50 + f * 45).toFixed(1) + '%';
+  el.curdot.style.background = Math.abs(f) > 0.55 ? '#ff9a6b' : '#7ff0ff';
+  el.curdot.style.transform = `scale(${(0.85 + Math.abs(f) * 0.35).toFixed(2)})`;
+}
+
+/* =========================================================================
+   18. ループ
+   ========================================================================= */
+let last = performance.now();
+function loop(now, noRender) {
+  // `now` は rAF のタイムスタンプ（フレーム開始時刻）。直前の `last` が
+  // performance.now() だと now < last になり dt が負になることがある。
+  // 負の dt は Math.pow(0, dt) = Infinity を呼び、lerp の係数が壊れて
+  // カメラの位置が NaN になる（一度なると NaN が貼り付く）。
+  // よって dt は 0 以上にクランプする。
+  const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+  last = now;
+  const t = now / 1000;
+
+  waterU.uTime.value = t;
+  waterLevel = riverY(P.z);
+  // 飛沫カーテンを落ちる順にスクロールさせる
+  if (fallTex) {
+    fallTex.offset.y = -t * 0.75;
+    fallTex.offset.x = Math.sin(t * 0.8) * 0.02;
+  }
+  for (const f of fallMats) {
+    const d = f.d;
+    const dist = d.z - P.z;
+    // 近づくと現れ、通り過ぎたら消える
+    let op = clamp(1 - Math.abs(dist - 4) / 46, 0, 1);
+    // カメラが lip の近くまで寄ったらカーテンを消して視界（艇）を確保する
+    op *= clamp((Math.abs(camera.position.z - d.z) - 9) / 14, 0, 1);
+    f.mat.opacity = op * 0.62;
+    f.mat.visible = f.mat.opacity > 0.02;
+  }
+  updateFlags(t);
+  updateNextMark(t);
+  for (const g of treeGroups) g.update(camera);   // 距離で詳細度・描画範囲を切り替え
+  updateParticles(dt);
+  updateSunAndWater();
+  Audio2.setRiver(state === 'play' ? clamp(P.v / 40, 0.12, 0.5) : 0.12);
+
+  if (state === 'title') {
+    updateTitleCamera(dt, t);
+    updateKayak(dt, t);
+  } else if (state === 'ready') {
+    updateKayak(dt, t);
+    updateCamera(dt, t);
+    readyT -= dt;
+    if (readyT <= 0) {
+      state = 'play';
+      el.cd.classList.add('hidden');
+      popup('GO!', 'big');
+      Audio2.splash();
+    }
+  } else if (state === 'play') {
+    updatePlay(dt, t);
+    updateKayak(dt, t);
+    updateCamera(dt, t);
+    updateHUD();
+  } else if (state === 'finish') {
+    updateFinish(dt, t);
+    updateKayak(dt, t);
+    updateCamera(dt, t);
+    updateHUD();
+  }
+
+  // タイトル画面では岸も流水も止まって見える
+  if (state === 'title') {
+    const px = cx(P.z) + P.s;
+    if (Math.random() < 0.25) emit(1, px + rand(-6, 6), waterLevel + 0.05, P.z + rand(-10, 10), 0.4, 0.9, 3, C_WATER, 0.6, 6);
+  }
+
+  updateVRM(dt, t);          // VRM アバター（最後に呼ぶ。既存の visibility を上書きするため）
+
+  // 天空はカメラに追従させる（原点-centered だと終点でドームの外に出る）
+  sky.position.copy(camera.position);
+
+  if (!noRender) renderer.render(scene, camera);
+}
+/* =========================================================================
+   VRM アバター（実験機能）
+   ------------------------------------------------------------------------
+   URL に ?vrm=<ファイル名> を付けたときだけ有効になる。
+   例）index.html?vrm=mollymolly.vrm
+       ?vrm=1  … 同届 VRM を一つ自動で選ぶ
+
+     使い方：
+     ・腰より下はカヤックと水の中なので描画しなくてよい
+     ・したがって「座るポーズ」を作る必要がない。立ちのまま置けばよい
+     ・当たり判定は一切ない（パドラーは物理に一切触れていない）
+   ========================================================================= */
+const VRM_BUILD = 'ik-20261020-bm';
+console.info('[kayak3d] build', VRM_BUILD, '| vrm:', !!new URLSearchParams(location.search).get('vrm'));
+
+const VRM = {
+  build: VRM_BUILD,
+  lib: null, model: null, root: null, clip: null, armL: null, armR: null, bones: null,
+  vrm: null,             // three-vrm の VRM インスタンス（デバッグ用）
+  leanBones: [],         // 上体を傾けるための正規化ボーン（chest / neck）
+  povEyeY: 1.30,         // 一人称カメラの高さ（VRM の頭に合わせて更新する）
+  stats: { err: 0, tick: 0, need: 0, peak: 0, hi: 0, grips: 0, fits: 0 },
+  hasHairBones: false, // 髪に専用ボーンがあるか（焼き込み髪では傾けない）
+  scale: 0.78,          // 落ちたアバターを座ったと見せるサイズに縮める
+  hipY: 0.58,           // 腰の高さ。コクピットの中に落とする
+  hipZ: 0,           // アバターは船体中央のまま。寄せると腕が届かなくなる
+  grip: 0.32,           // パドラー（櫂）の握り間隔（実物に合うように詰める）
+  loaded: false, loading: false, error: null,
+};
+
+// 上体の傾斜を使うか（?lean=0 で無効化できる。比較用）
+const LEAN_ON = new URLSearchParams(location.search).get('lean') !== '0';
+
+// メッシュがスキニングされている実際の骨を取り出す
+// skeleton.bones は「実際に描画を駆動している骨」（raw の glTF ノード）。
+// VRM 0.x / 1.0 / VRoid で命名が異なるので、スキルトンの骨名で照合する。
+// ただし raw の骨を直接回しても、three-vrm の autoUpdateHumanBones が
+// 正規化リグの値で上書きしてしまう（実測した）。
+// 「姿勢を変える」のは getNormalizedBoneNode が返す正規化ノードでやる。
+// 手指の骨名の判定。VRM 0.x / 1.0 / VRoid / Mixamo / MMD で命名が異なるので、
+// 一括に例外を含むルールで並べる。
+const FINGER_RE = /finger|thumb|index|middle|ring|pinky|little|\u5c0f\u6307|\u62c7\u6307/i;   // VRoid は小指を 'Little' と呼ぶ
+
+function resolveArmBones(model) {
+  // メッシュが複数あるモデル（ヘアなどの部品は骨 1 つだけを持つ）のため、
+  // 「一つ目の skinnedMesh」だと実体と異なることがある。骨が最多のものが本体。
+  let bones = null, best = -1;
+  model.scene.traverse(o => {
+    if (!o.isSkinnedMesh) return;
+    const n = o.skeleton.bones.length;
+    if (n > best) { best = n; bones = o.skeleton.bones; }
+  });
+  if (!bones) return null;
+  // 側の判定。命名は VRoid(J_Bip_R_)、mixamorig(Right)、
+  // Mixamo(RightArm)、MMD 系は別の命名なので、これらを順に見る。
+  // 「Upper_armR」のように大文字 R/L が末尾に付くものは大文字だけ見る。
+  const sideOf = name => {
+    if (/[RL]$/.test(name)) return name.slice(-1);        // MMD 系: Upper_armR / HandL
+    if (/right/i.test(name)) return 'R';
+    if (/left/i.test(name)) return 'L';
+    if (/(^|[^a-zA-Z])[rR]([^a-zA-Z]|$)/.test(name)) return 'R';   // _R_ / _r / .r
+    if (/(^|[^a-zA-Z])[lL]([^a-zA-Z]|$)/.test(name)) return 'L';
+    return null;
+  };
+  const side = (b, s) => sideOf(b.name) === s;
+  // Twist などのねじり旋り骨は優先的にはない。
+  const usable = b => !/twist|helper|prop|adjust/i.test(b.name);
+
+  // 上腕：VRoid / mixamorig は UpperArm、Mixamo は単独の 'RightArm' だけで
+  // ForeArm も Hand も Shoulder も Arm で終わっているので、先に前者を見て、
+  // なければ后者で「Arm で終わるもの」を探す。
+  const pickUpper = s => {
+    for (const b of bones) if (usable(b) && side(b, s) && /upperarm|upper_arm/i.test(b.name)) return b;
+    for (const b of bones) {
+      if (!usable(b) || !side(b, s)) continue;
+      if (/forearm|fore_arm|shoulder|clavicle|hand/i.test(b.name)) continue;
+      if (/arm$/i.test(b.name)) return b;
+    }
+    return null;
+  };
+  const pickLower = s => bones.find(b => usable(b) && side(b, s) &&
+    /lowerarm|lower_arm|forearm|fore_arm/i.test(b.name)) || null;
+  // 手：指（finger / thumb）を先に除いて、それ以外の指の骨を取る
+  const pickHand = s => bones.find(b => usable(b) && side(b, s) &&
+    /hand/i.test(b.name) &&
+    !/finger|thumb|index|middle|ring|pinky|little/i.test(b.name)) || null;
+  const pickAny = re => bones.find(b => re.test(b.name)) || null;
+  const mk = s => ({ upperArm: pickUpper(s), lowerArm: pickLower(s), hand: pickHand(s) });
+  return {
+    armR: mk('R'), armL: mk('L'),
+    boneCount: bones.length,
+    all: bones,
+    hips: pickAny(/hips|pelvis/i),
+    head: pickAny(/head/i),
+  };
+}
+
+// 向きは「頭と腰」で上方向、「右手と左手」で右方向を確定して求める。
+// up = head − hips、right = 右手 − 左手、fwd = up × right。
+// T ポーズでは左右の手が入れ替わることがあるので、
+// 腰ボーンのローカル軸ではなく「実際に腕が伸びている手」の位置で判定する。
+// リグの約定（VRM 0.x は +Z 向き、VRM 1.0 は -Z 向き）で符号が反転するので、
+// 最終的には fwd.z の符号で「背中を向いているか」を判断して root を回す。
+function fixFacing(vrm, root, kayak, bones) {
+  const head = bones && bones.head;
+  const hips = bones && bones.hips;
+  const rh = bones && bones.armR.hand, lh = bones && bones.armL.hand;
+  if (!head || !hips || !rh || !lh) return null;
+  const w = b => { const v = new THREE.Vector3(); b.getWorldPosition(v); kayak.worldToLocal(v); return v; };
+  const up = w(head).sub(w(hips)).normalize();
+  const right = w(rh).sub(w(lh)).normalize();
+  const fwd = new THREE.Vector3().crossVectors(up, right).normalize();
+  const flip = fwd.z > 0;          // z が正 = 背中を向いている
+  if (flip) root.rotation.y += Math.PI;
+  return { fwd: fwd.toArray().map(n => +n.toFixed(2)), flipped: flip };
+}
+
+// --- VRM モデルの同梱設定 -----------------------------------------------
+// VRM_BUNDLED : VRM を同梱するかどうか
+//   false = 公開版（GitHub Pages）。VRM を同梱しないので、ドロップダウンは
+//            「アバターなし（既定）」だけになり、V キーも何も起きない。
+//            訪問者は「ファイル…」から自分の PC の VRM を読める。
+//   true  = 自分の PC で使うとき。assets/Model/ 以下のファイルを一覧に出す。
+//
+// VRM はライセンス（Proprietary）のためリポジトリには入れない。
+// 公開版で 404 を连串させないために、このフラグで「一覧に出さない」だけにする。
+const VRM_BUNDLED = false;
+
+// 参考のアバター一覧。ファイルを assets/Model/ のディレクトリに入れて、
+// assets/Model/ の中のファイル名を書き込む。
+const VRM_LIST = VRM_BUNDLED ? [
+  'mollymolly.vrm',
+  'MyAvatartest_20240311114225.vrm',
+  'vketdevil冬服.vrm',
+  'Xbase青シャツvrm1.0.vrm',
+  'MaryciaVRM私的変換.vrm',
+  'Grus.vrm',
+] : [];
+
+// 状態表示（読み込み中・失敗・使用中）。案内のテキストとは区別して控えめにする。
+function vrmNote(txt) { const e = document.getElementById('vrm-note'); if (e) { e.textContent = txt; e.style.color = '#8fb8d0'; e.style.fontWeight = '400'; } }
+
+/* =========================================================================
+   言語切り替え（日本語 / English）
+   -------------------------------------------------------------------------
+   静的な文言は HTML 側の data-en 属性で切り替える。
+   JS で作る文言（難易度の説明・結果画面）は tr() を使う。
+   ※ tr() という名前なのは、updatePlay(dt, t) の第 2 引数が経過時間（t）で
+     衝突するため。t() にすると updatePlay の中で t が変数に隠れてしまう。
+   ========================================================================= */
+let curLang = 'ja';
+
+function tr(ja, en) { return curLang === 'en' ? en : ja; }
+
+const DIFF_NOTES = {
+  easy: ['EASY：流れは穏やか。旗の判定も甘め', 'EASY: a gentle current, forgiving gates'],
+  normal: ['NORMAL：押し流されるぶんを櫂で打ち消す', 'NORMAL: use your paddle to counter the current'],
+  hard: ['HARD：流しは激しく、旗の判定もキツい', 'HARD: strong current, tight gates'],
+};
+
+function applyDiffNote() {
+  const e = document.getElementById('diffnote');
+  const n = DIFF_NOTES[diffKey] || DIFF_NOTES.normal;
+  if (e) e.textContent = tr(n[0], n[1]);
+}
+
+// アバター選択まわりの日本語（ドロップダウン・ツールチップ）
+function applyVrmLang() {
+  const sel = document.getElementById('vrm-sel');
+  if (sel && sel.options.length && sel.options[0].value === '') {
+    sel.options[0].textContent = tr('アバターなし（既定）', 'No avatar (default)');
+  }
+  const pv = document.getElementById('vrm-prev');
+  const nx = document.getElementById('vrm-next');
+  if (pv) pv.title = tr('前のアバター', 'Previous avatar');
+  if (nx) nx.title = tr('次のアバター', 'Next avatar');
+  // 同梱版（VRM_BUNDLED）は V キーでも切り替えられるので、その案内も足す
+  if (VRM_BUNDLED) {
+    const nt = document.getElementById('vrm-note');
+    if (nt) nt.textContent = tr('V キーでアバターを切り替え（Shift+V で戻り）。手持ちの VRM は「ファイル…」から読み込めます',
+                              'Press V to switch avatars (Shift+V for back). Load your own VRM with the "File..." button');
+  }
+}
+
+// 結果画面の文言。言語を切り替えたとき描き直すため保持する。
+let resultState = null;
+
+function renderResult() {
+  if (!resultState) return;
+  const r = resultState;
+  document.getElementById('result-title').textContent =
+    r.cleared === r.total ? 'PERFECT RUN!' : tr('ゴール！', 'You made it!');
+  document.getElementById('result-detail').innerHTML =
+    tr(`旗 <b>${r.cleared}</b> / ${r.total} 通過　·　PERFECT <b>${r.perfect}</b><br>` +
+      `最大コンボ <b>×${r.combo}</b>　·　タイム <b>${r.time}s</b>`,
+      `Flags <b>${r.cleared}</b> / ${r.total} cleared · PERFECT <b>${r.perfect}</b><br>` +
+      `Max combo <b>×${r.combo}</b> · Time <b>${r.time}s</b>`);
+}
+
+function applyLang(lang) {
+  curLang = (lang === 'en') ? 'en' : 'ja';
+  try { localStorage.setItem('kayak3d.lang', curLang); } catch (e) {}
+  document.documentElement.lang = curLang;
+  document.querySelectorAll('[data-en]').forEach(el => {
+    if (el.dataset.ja === undefined) el.dataset.ja = el.innerHTML;
+    el.innerHTML = (curLang === 'en') ? el.dataset.en : el.dataset.ja;
+  });
+  document.querySelectorAll('[data-lang]').forEach(b => {
+    b.classList.toggle('on', b.dataset.lang === curLang);
+  });
+  applyDiffNote();
+  applyVrmLang();
+  renderResult();
+}
+
+document.querySelectorAll('[data-lang]').forEach(b => {
+  b.addEventListener('click', () => applyLang(b.dataset.lang));
+});
+{
+  // 保存済みの言語を復元する（既定は日本語）
+  let saved = null;
+  try { saved = localStorage.getItem('kayak3d.lang'); } catch (e) {}
+  applyLang(saved === 'en' ? 'en' : 'ja');
+}
+
+// 現在表示しているアバターを取り除く。GPU メモリの漏れを防ぐ。
+function unloadVRM() {
+  if (VRM.root) {
+    kayak.remove(VRM.root);
+    const seen = new Set();
+    VRM.root.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+      if (!o.material) return;
+      for (const mt of (Array.isArray(o.material) ? o.material : [o.material])) {
+        if (!mt) continue;
+        for (const key in mt) {
+          const v = mt[key];
+          if (v && v.isTexture && !seen.has(v)) { seen.add(v); v.dispose(); }
+        }
+        mt.dispose();
+      }
+    });
+  }
+  VRM.model = null; VRM.root = null; VRM.clip = null;
+  VRM.vrm = null; VRM.leanBones = [];
+  VRM.armL = null; VRM.armR = null; VRM.facing = null;
+  VRM.loaded = false; VRM.error = null;
+  VRM.scale = 0.78; VRM.grip = 0.32; VRM.hipY = 0.58;
+  VRM.stats = { err: 0, tick: 0, need: 0, peak: 0, grips: 0 };
+  // 既存のパドラーを戻す
+  paddler.userData.torsoPivot.visible = true;
+  paddler.userData.armL.g.visible = true;
+  paddler.userData.armR.g.visible = true;
+  const h = document.getElementById('vrmhud');
+  if (h) h.style.display = 'none';
+}
+
+function vrmPick(file, directURL) {
+  if (!file) return;
+  if (!directURL) { try { localStorage.setItem('kayak3d.vrm', file); } catch (e) {} }
+  const sel = document.getElementById('vrm-sel');
+  if (sel && !directURL) sel.value = file;
+  loadVRM(file, directURL);
+}
+
+function vrmStep(dir) {
+  const sel = document.getElementById('vrm-sel');
+  if (!sel || !sel.options.length) return;
+  sel.selectedIndex = (sel.selectedIndex + dir + sel.options.length) % sel.options.length;
+  vrmPick(sel.value);
+}
+
+function buildVRMUI() {
+  const sel = document.getElementById('vrm-sel');
+  if (!sel) return;
+  for (const f of VRM_LIST) {
+    const o = document.createElement('option');
+    o.value = f; o.textContent = f.replace(/\.vrm$/i, '');
+    sel.appendChild(o);
+  }
+  const none = document.createElement('option');
+  none.value = ''; none.textContent = tr('アバターなし（既定）', 'No avatar (default)');
+  sel.insertBefore(none, sel.firstChild);
+  sel.addEventListener('change', () => { if (sel.value) vrmPick(sel.value); else unloadVRM(); });
+  document.getElementById('vrm-prev').addEventListener('click', () => vrmStep(-1));
+  document.getElementById('vrm-next').addEventListener('click', () => vrmStep(1));
+  const inp = document.getElementById('vrm-input');
+  document.getElementById('vrm-file').addEventListener('click', () => inp.click());
+  inp.addEventListener('change', () => {
+    const f = inp.files && inp.files[0];
+    if (f) vrmPick(f.name, URL.createObjectURL(f));
+  });
+  applyVrmLang();
+  let saved = null;
+  try { saved = localStorage.getItem('kayak3d.vrm'); } catch (e) {}
+  return saved;
+}
+
+// 縮尺と腰の位置をもう一括で置き直す。設定の変更時に使う。
+function fitVRM() {
+  if (!VRM.root) return;
+  VRM.root.scale.setScalar(VRM.scale);
+  VRM.root.updateMatrixWorld(true);
+  if (!VRM.bones || !VRM.bones.hips) return;
+  const ph = new THREE.Vector3();
+  VRM.bones.hips.getWorldPosition(ph);
+  kayak.worldToLocal(ph);
+  VRM.root.position.x -= ph.x;
+  VRM.root.position.y += VRM.hipY - ph.y;
+  VRM.root.position.z += VRM.hipZ - ph.z;
+}
+
+async function loadVRM(fileName, directURL) {
+  if (VRM.loading) return VRM;
+  if (VRM.loaded) unloadVRM();   // 切替時は先に旧アバターを落とす
+  VRM.loading = true;
+  vrmNote(tr('読み込み中: ' + fileName + ' …', 'Loading: ' + fileName + ' ...'));
+  try {
+    // 動的 import。使わないときは取得しない
+    // three-vrm 3.x は VRMLoader クラスを廃止したので、
+    // 通常の GLTFLoader にプラグインを載せる方式になる
+    VRM.lib = VRM.lib || await import('@pixiv/three-vrm');
+    const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.register((parser) => new VRM.lib.VRMLoaderPlugin(parser));
+
+    const url = directURL || ('assets/Model/' + encodeURIComponent(fileName));
+    const gltf = await gltfLoader.loadAsync(url);
+    const vrm = gltf.userData.vrm;
+    if (!vrm) throw new Error('VRM として解釈できませんでした');
+    // VRM 0.x は向きの規約が違うので補正する
+    if (vrm.meta && vrm.meta.metaVersion === '0') VRM.lib.VRMUtils.rotateVRM0(vrm);
+
+    VRM.root = vrm.scene;
+    kayak.add(VRM.root);
+
+    // 描画に関係する実際の骨（スケルトン上の bones）を先に求めておく
+    const bones = resolveArmBones(vrm);
+
+    // VRM は +Z 向き。艇の船首は -Z なので回す
+    VRM.root.rotation.y = Math.PI;
+
+    // --- セイズの自動調整 ---
+    // モデルによって身長が大きさが違いますが、縮尺を固定すると肩がパドルに
+    // 届かない。「腰～肩」の長さを目指するように縮尺を求める。
+    VRM.root.scale.setScalar(1);
+    VRM.root.updateMatrixWorld(true);
+    if (bones && bones.hips && bones.armR.upperArm) {
+      const hp = bones.hips.getWorldPosition(new THREE.Vector3());
+      const sp = bones.armR.upperArm.getWorldPosition(new THREE.Vector3());
+      const rawTorso = hp.distanceTo(sp);
+      // 肩がパドルの高さ（y ≈ PADDLE_Y）に到達するように縮尺を求める。
+      // 最後に VRM_SIZE（見た目用の大きさ倍率）を掛ける。
+      if (rawTorso > 1e-4) {
+        VRM.rawTorso = rawTorso;
+        VRM.scale = clamp((PADDLE_Y - VRM.hipY) / rawTorso, 0.35, 1.8) * VRM_SIZE;
+      }
+    }
+    VRM.root.scale.setScalar(VRM.scale);
+    VRM.root.updateMatrixWorld(true);
+
+    // --- 向きの裁定 ---
+    // 自動判定でも、?flip=1 で強制に転倒できるようにしておく
+    VRM.facing = fixFacing(vrm, VRM.root, kayak, bones);
+    const wantFlip = new URLSearchParams(location.search).get('flip');
+    if (wantFlip === '1' && VRM.facing && !VRM.facing.flipped) {
+      VRM.root.rotation.y += Math.PI;
+      VRM.facing.flipped = true;
+      VRM.facing.forced = true;
+    }
+    console.info('[VRM] facing', JSON.stringify(VRM.facing));
+
+    // 腰を席の中心に合わせる（スケール後、方向裁定終了のみ）
+    if (bones && bones.hips) {
+      const ph = new THREE.Vector3();
+      bones.hips.getWorldPosition(ph);
+      kayak.worldToLocal(ph);
+      VRM.root.position.x -= ph.x;
+      VRM.root.position.y += VRM.hipY - ph.y;
+      VRM.root.position.z += VRM.hipZ - ph.z;   // 席の中心に合わせる
+    }
+    // スプリングボーンの初期状態は、スケールと腰の位置が確定したあとに取り直す。
+    // 先に解いてしまうと、スケールや腰の位置が確定する前に毛が動いてしまう。
+    // そうでなければ毛が上に浮いたり、前髪が下に垂れる。
+    kayak.updateMatrixWorld(true);
+
+    // --- 一人称カメラ（POV）の高さ ---
+    // POV カメラは艇の固定位置（y=1.30）に置かれるので、
+    // 頭が大きく背の高い VRM だと頭が視界を塞いでしまう。
+    // モデルの頭骨の位置に合わせて「頭より少し上」に置く。
+    VRM.povEyeY = POV_EYE.y;
+    if (bones && bones.head) {
+      const hy = new THREE.Vector3();
+      bones.head.getWorldPosition(hy);
+      kayak.worldToLocal(hy);
+      VRM.povEyeY = hy.y + 0.24;
+    }
+
+    // --- 腰より下をクリッピングで落とす ---
+    // clippingPlanes はワールド座標なので毎フレーム作り直す
+    // --- スプリングボーンの基準フレーム ---
+    // center が null のままでは世界空間で計算されるため、艇が流れると毛が後ろに引きづいて
+    // 艇が動くと毛がねじれてしまう。基準フレームをアバターのルート（艇の子）にして、
+    // 流れによっても毛が後ろに引きづきないようにする。
+    if (vrm.springBoneManager) {
+      const sm = vrm.springBoneManager;
+      const frame = VRM.root;                 // アバターのルート（艇の子）
+      for (const g of (sm.colliderGroups || [])) g.center = frame;
+      if (sm._joints) for (const j of sm._joints) j.center = frame;
+      // 基準フレームを変えたので、初期状態を取り直す
+      if (sm.reset) sm.reset();
+    }
+
+    VRM.clip = new THREE.Plane(new THREE.Vector3(0, 1, 0), -VRM.hipY + 0.06);
+    VRM.root.traverse(o => {
+      if (!o.isMesh) return;
+      const ms = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of ms) {
+        m.clippingPlanes = [VRM.clip];
+        m.clipShadows = true;          // 影に脚が残らないように
+      // アウトライン用マテリアルは裏面描画が前提。side を触ると横の面まで描いて
+      // モデル全体がアウトライン色に覆われるので、触らない。
+      if (!m.isOutline) m.side = THREE.DoubleSide;
+        m.needsUpdate = true;
+      }
+    });
+    renderer.localClippingEnabled = true;
+
+    VRM.bones = bones;
+    VRM.vrm = vrm;              // デバッグ用（スプリングボーンの確認に必要）
+    // 髪などに専用ボーン（スプリングボーンで動く髪）があるかを判定する。
+    // 焼き込み髪（VRChat のようなメッシュ）はボーンがなく、
+    // そのため上体を傾けると首がねじれて髪が捻れます。
+    VRM.hasHairBones = false;
+    if (bones) {
+      VRM.hasHairBones = bones.all.some(b => /hair|\u9aab|skirt|cloth|tail|\u5c3e/i.test(b.name));
+    }
+
+    // --- 上体の傾斜（首〜胸） ---
+    // three-vrm は「正規化リグ」の回転を元の骨へ自動コピーする（autoUpdateHumanBones）。
+    // つまり描画を動かしたければ **正規化ノード** を回す必要がある。
+    // 元の骨（skeleton.bones）を直接回すと、次のフレームで正規化リグの値に戻される。
+    // 首と胸はVRM 0.x / 1.0 / VRoid のどれにも必ずあるので、ここを傾ける。
+    // 髪・服の骨は「首」の子（Head_2 / Head_3）なので、
+    // 首を回せばそれらも一緒に動き、スプリングボーンが反応する。
+    VRM.leanBones = [];
+    for (const nm of ['chest', 'neck']) {
+      const n = vrm.humanoid && vrm.humanoid.getNormalizedBoneNode
+        ? vrm.humanoid.getNormalizedBoneNode(nm) : null;
+      if (n) VRM.leanBones.push({ node: n, w: nm === 'chest' ? 0.6 : 0.4 });
+    }
+
+    // 自動判定は使わない（?lean=1 で手動で有効にする）
+    VRM.armR = bones ? bones.armR : { upperArm: null, lowerArm: null, hand: null };
+    VRM.armL = bones ? bones.armL : { upperArm: null, lowerArm: null, hand: null };
+    console.info('[VRM] bones =', bones ? bones.boneCount : 0,
+      '| scale', VRM.scale.toFixed(3),
+      '| R upper:', VRM.armR.upperArm && VRM.armR.upperArm.name);
+    const missing = ['armR', 'armL'].flatMap(k =>
+      Object.entries(VRM[k]).filter(([, n]) => !n).map(([b]) => k + '.' + b));
+    if (missing.length) console.warn('[VRM] 骨が見つかりません:', missing.join(', '));
+
+    // 骨長はロード時にワールド実測で控えておく。
+    // bone.position はローカル座標なので、それを使うとスケールが乗じて取れない
+    const wp = (nd) => nd.getWorldPosition(new THREE.Vector3());
+    for (const k of ['armR', 'armL']) {
+      const a = VRM[k];
+      if (!a.upperArm || !a.lowerArm || !a.hand) continue;
+      a.L1 = wp(a.upperArm).distanceTo(wp(a.lowerArm));
+      a.L2 = wp(a.lowerArm).distanceTo(wp(a.hand));
+      // 櫂を横切るローカル軸：前腕と最も直交するものを測る
+      // --- 手の 3 軸を「指の方向」から一意に決める ---
+      //  手のローカル軸 = ① 掌を横切る軸 / ② 指の方向の軸 / ③ 掌の法線の軸
+      // 当初は「掌が下を向く軸」という推定で探していたが、
+      //  VRM 1.0 のリグでは別の軸が候補になるため、指（第一節骨）の方向から求める。
+      if (a.L1 > 1e-4) {
+        const q = new THREE.Quaternion();
+        a.hand.getWorldQuaternion(q);
+        const axes = [0, 1, 2].map(i =>
+          new THREE.Vector3(i === 0 ? 1 : 0, i === 1 ? 1 : 0, i === 2 ? 1 : 0).applyQuaternion(q));
+
+        const hp = wp(a.hand);
+        const fdir = new THREE.Vector3();
+        let fc = 0;
+        for (const ch of a.hand.children) {
+          if (!FINGER_RE.test(ch.name)) continue;
+          fdir.add(wp(ch).sub(hp));
+          fc++;
+        }
+        if (fc) fdir.normalize();
+        else fdir.copy(wp(a.lowerArm)).sub(hp).normalize();   // 指のないリグでは前臂方向で代用
+
+        // ② 指方向の軸
+        let fIdx = 0, fBest = -1;
+        axes.forEach((ax, i) => { const d = Math.abs(ax.dot(fdir)); if (d > fBest) { fBest = d; fIdx = i; } });
+        // 指の向きの符号。左手は軸が指と逆を向くので、絕対値だけでは分からない。
+        a.fingerSign = axes[fIdx].dot(fdir) >= 0 ? 1 : -1;
+
+        // ① 掌を横切る軸：指に直交し、かつ水平（列ポーズでは手を左右に振る）
+        const horiz = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), fdir);
+        if (horiz.lengthSq() < 1e-8) horiz.set(1, 0, 0);
+        horiz.normalize();
+        let sIdx = 0, sBest = -1;
+        axes.forEach((ax, i) => { const d = Math.abs(ax.dot(horiz)); if (d > sBest) { sBest = d; sIdx = i; } });
+        if (sIdx === fIdx) sIdx = (fIdx + 1) % 3;
+
+        a.shaftIdx = sIdx;              // 掌を横切る軸 → 櫂に合わせる
+        a.fingerIdx = fIdx;             // 指方向の軸
+        a.palmIdx = 3 - sIdx - fIdx;    // 残りが掌の法線の軸
+        // 軸の並びから決まる符号（e_shaft × e_palm = ±e_finger）。
+        // これをえると、指方向は「シャフト方向 × 掌の法線」から直接求められる。
+        {
+          const es = new THREE.Vector3(), ep = new THREE.Vector3(), ef = new THREE.Vector3();
+          es.setComponent(sIdx, 1); ep.setComponent(a.palmIdx, 1); ef.setComponent(fIdx, 1);
+          a.fingerAxisSign = (new THREE.Vector3().crossVectors(es, ep).dot(ef) >= 0) ? 1 : -1;
+        }
+
+        // 指を巻ぐ方向：指は掌側（= -P 方向）へ向けるべき
+        const P = axes[a.palmIdx];
+        const A = axes[a.shaftIdx];
+        a.curlSign = (new THREE.Vector3().crossVectors(A, fdir).dot(P) > 0) ? -1 : 1;
+
+        // 指：手首の下に連なる骨を深さで探し、毎骨のリセット式と
+        // カールの軸（親のローカル空間）を控えておく
+        const axWorld = A;
+        a.fingers = [];
+        (function walk(node, depth) {
+          if (depth > 4) return;
+          for (const ch of node.children) {
+            if (!FINGER_RE.test(ch.name)) continue;
+            const qp = new THREE.Quaternion();
+            ch.parent.getWorldQuaternion(qp); qp.invert();
+            const isThumb = /thumb|\u62c7\u6307/i.test(ch.name);
+            const mult = isThumb ? 0.62 : [0, 1.0, 1.0, 0.75, 0.5][Math.min(depth, 4)];
+            a.fingers.push({
+              bone: ch,
+              rest: ch.quaternion.clone(),
+              axis: axWorld.clone().applyQuaternion(qp).normalize(),
+              ang: 0.95 * mult,
+            });
+            walk(ch, depth + 1);
+          }
+        })(a.hand, 1);
+
+        // 手の長さ（手首 → こぶしの中心）。
+        // IK は「手首」を櫂軸に置くので、この分だけ手首を離さないと
+        // 櫂が手のひらの中心に来ず、指が櫂の手前に突き抜けてしまう。
+        {
+          const hp = a.hand.getWorldPosition(new THREE.Vector3());
+          const sum = new THREE.Vector3();
+          let n = 0;
+          for (const f of a.fingers) { sum.add(f.bone.getWorldPosition(new THREE.Vector3())); n++; }
+          a.handLen = n ? hp.distanceTo(sum.multiplyScalar(1 / n)) : 0.07;
+        }
+      }
+    }
+    console.info('[VRM] L1/L2 =', VRM.armR.L1 ? VRM.armR.L1.toFixed(3) : '-', '/', VRM.armR.L2 ? VRM.armR.L2.toFixed(3) : '-');
+
+    VRM.model = vrm;
+    VRM.file = fileName;
+    VRM.loaded = true;
+    vrmNote(tr('使用中: ' + fileName, 'Using: ' + fileName));
+    // タイトル画面ではスタートボタンと重なるため、
+    { const h = vrmHUD(); h.style.display = (state === 'play' || state === 'ready') ? '' : 'none'; }
+    vrmHUD();
+    // 既存のパドラー（胴・腕）は隠し、パドルだけ残す
+    paddler.userData.torsoPivot.visible = false;
+    paddler.userData.armL.g.visible = false;
+    paddler.userData.armR.g.visible = false;
+    console.info('[VRM] loaded:', fileName, vrm.meta?.meta?.title || '');
+  } catch (e) {
+    VRM.error = String(e);
+    console.error('[VRM] load failed:', fileName, e);
+    vrmNote(tr('読み込み失敗: ' + fileName + '  →  ' + String(e).slice(0, 90),
+               'Failed to load: ' + fileName + '  →  ' + String(e).slice(0, 90)));
+    const h = vrmHUD();
+    h.textContent = 'VRM LOAD ERROR\n' + String(e).slice(0, 160);
+  }
+  VRM.loading = false;
+  return VRM;
+}
+
+/* --- 2 ボーン IK -----------------------------------------------------------
+   肩 → 肘 → 手首 の 3 ボーンを、パドルの握り点へ追従させる。
+   余弦定理で肘の位置を決め、pole（肘の逃がし方向）で向きを決める。
+   ---------------------------------------------------------------------- */
+const _ik = {
+  upW: new THREE.Vector3(), elW: new THREE.Vector3(), hdW: new THREE.Vector3(),
+  dir: new THREE.Vector3(), goal: new THREE.Vector3(), perp: new THREE.Vector3(),
+  elbow: new THREE.Vector3(), target: new THREE.Vector3(), tgt: new THREE.Vector3(),
+  tmp: new THREE.Vector3(), axis: new THREE.Vector3(),
+  qW: new THREE.Quaternion(), qD: new THREE.Quaternion(), qP: new THREE.Quaternion(),
+  qPaddle: new THREE.Quaternion(),
+  shaft: new THREE.Vector3(),
+  hax: new THREE.Vector3(),
+  e1: new THREE.Vector3(),
+  e2: new THREE.Vector3(),
+  e3: new THREE.Vector3(0, 1, 0),   // 艇のローカル上方向（掌の基準）
+  qBoat: new THREE.Quaternion(),
+  qHand: new THREE.Quaternion(),
+  ax0: new THREE.Vector3(), ax1: new THREE.Vector3(), ax2: new THREE.Vector3(),
+  d0: new THREE.Vector3(), d1: new THREE.Vector3(), d2: new THREE.Vector3(),
+  t0: new THREE.Vector3(), t1: new THREE.Vector3(), t2: new THREE.Vector3(),
+  qA: new THREE.Quaternion(),
+  mCur: new THREE.Matrix4(), mTar: new THREE.Matrix4(), mRot: new THREE.Matrix4(),
+  qB: new THREE.Quaternion(), qPL: new THREE.Quaternion(),
+  qPLi: new THREE.Quaternion(), qLean: new THREE.Quaternion(),
+  poleR: new THREE.Vector3( 0.45, -0.75, 0.15),
+  poleL: new THREE.Vector3(-0.45, -0.75, 0.15),
+};
+
+// bone を「子ボーンが dir を向く」ように回す（world 空間基準）
+function aimBone(bone, child, dir) {
+  _ik.tmp.copy(dir);
+  if (_ik.tmp.lengthSq() < 1e-10) return;
+  _ik.tmp.normalize();
+  bone.getWorldQuaternion(_ik.qW);
+  _ik.axis.copy(child.position).normalize().applyQuaternion(_ik.qW);   // 現在の子方向
+  _ik.qD.setFromUnitVectors(_ik.axis, _ik.tmp);                        // 今回足する回転
+  bone.parent.getWorldQuaternion(_ik.qP);
+  bone.quaternion.copy(_ik.qP.invert()).multiply(_ik.qD).multiply(_ik.qW);
+}
+
+// 手首を「櫂を横切る軸」の方向に合わせる。
+// この軸はモデルの小さなリグですれても、
+// 読み込み時に前腕と最も直交するものを選っておくと、命名と軸の約定で迷わない。
+// shaftIdx = 0/1/2 のどのローカル軸を櫂に合わせるか。
+// 手首を櫂に完全に合わせる。
+//   · 櫂を横切る軸 → 櫂シャフトの方向
+//   · 掌の法線       → shaft × forearm
+// 掌は櫂上にあり、指は前腕の延長なので、この二つで掌の向きは一意に決まる。
+// しておきるので、シャフト回りのロール（掌の向き）も決まる。
+// 指を櫂に巻き込ませる。すべてリストポーズからの偏差を確認し、
+// その後にカールするため毎フレームでリセットしてからよい。
+function curlFingers(arm, amount) {
+  const list = arm.fingers;
+  if (!list || !list.length) return;
+  for (const f of list) {
+    f.bone.quaternion.copy(f.rest);              // 先にリストに戻す
+    if (!amount) continue;
+    _ik.qA.setFromAxisAngle(f.axis, f.ang * amount * (arm.curlSign || 1));
+    f.bone.quaternion.premultiply(_ik.qA);        // 親のローカル空間で巻き込む
+  }
+}
+
+function aimHand(hand, shaftDir, foreDir, shaftIdx, palmIdx) {
+  if (shaftIdx === undefined || palmIdx === undefined) return;
+  const S = _ik.shaft.copy(shaftDir);
+  if (S.lengthSq() < 1e-12) return; S.normalize();
+  const F = _ik.e1.copy(foreDir);
+  if (F.lengthSq() < 1e-12) return; F.normalize();
+  // 掌の法線 = 艇のローカル「上」方向を、櫂軸に直交する成分に落としたもの。
+  // パドルは「上から握る」握りなので、掌の外向きは上を向き、
+  // 手のひらは櫂の下に来る（= 手が櫂の上に乗る）。
+  // 櫂軸だけで決めると左右の手が完全に同じ握り方になり、
+  // 握り方が左右で入れ替わらない（左手だけ手の甲で櫂を掴むようになる）。
+  // 前腕（foreDir）を使うと、漕ぐ側だけ手の向きが回ってしまうので使わない。
+  const P = _ik.e2.copy(_ik.e3);
+  P.addScaledVector(S, -P.dot(S));
+  if (P.lengthSq() < 1e-8) { P.crossVectors(F, S); }   // 櫂軸が縦のときは前腕で代用
+  if (P.lengthSq() < 1e-10) return;
+  P.normalize();
+
+  hand.getWorldQuaternion(_ik.qW);
+  const cur = _ik.qW;
+  const A = [_ik.ax0, _ik.ax1, _ik.ax2];
+  const D = [_ik.d0, _ik.d1, _ik.d2];
+  for (let i = 0; i < 3; i++)
+    A[i].set(i === 0 ? 1 : 0, i === 1 ? 1 : 0, i === 2 ? 1 : 0).applyQuaternion(cur);
+
+  D[shaftIdx].copy(S);
+  D[palmIdx].copy(P);
+  const k = 3 - shaftIdx - palmIdx;
+  D[k].crossVectors(D[shaftIdx], D[palmIdx]);
+  // 右手系を保つ（そうでなければ残りの軸を反転）
+  _ik.t1.crossVectors(D[1], D[2]);
+  if (D[0].dot(_ik.t1) < 0) D[k].negate();
+
+  _ik.mCur.makeBasis(A[0], A[1], A[2]);
+  _ik.mTar.makeBasis(D[0], D[1], D[2]);
+  _ik.mRot.multiplyMatrices(_ik.mTar, _ik.mCur.transpose());   // 直交なので逆行列 = 逆行列
+  _ik.qD.setFromRotationMatrix(_ik.mRot);
+  hand.parent.getWorldQuaternion(_ik.qP);
+  hand.quaternion.copy(_ik.qP.invert()).multiply(_ik.qD).multiply(cur);
+}
+
+function ikArm(arm, target, pole) {
+  const { upW, elW, dir, goal, perp, elbow } = _ik;
+  _ik.tgt.copy(target);   // 元の目標点を控えておく（target は下で使い回される）
+  arm.upperArm.getWorldPosition(upW);
+
+  // 骨長はロード時にワールド実測したものを使う
+  const L1 = arm.L1, L2 = arm.L2;
+
+
+  // 目標までの距離を、届く範囲に収める
+  dir.copy(target).sub(upW);
+  arm.need = dir.length();
+  arm.reach = L1 + L2;
+  let d = dir.length();
+  if (d < 1e-5) return;
+  dir.divideScalar(d);
+  const dc = clamp(d, Math.abs(L1 - L2) + 0.02, L1 + L2 - 0.02);
+  goal.copy(upW).addScaledVector(dir, dc);
+
+  // 余弦定理：肩から肘までの射影長 a と、-axis 方向への逃げ h
+  const a = (L1 * L1 - L2 * L2 + dc * dc) / (2 * dc);
+  const h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
+  perp.copy(pole).addScaledVector(dir, -pole.dot(dir));
+  if (perp.lengthSq() < 1e-8) perp.set(0, 1, 0).addScaledVector(dir, -dir.y);
+  perp.normalize();
+  elbow.copy(upW).addScaledVector(dir, a).addScaledVector(perp, h);
+
+  // 上腕：肩 → 肘
+  _ik.target.copy(elbow).sub(upW);
+  aimBone(arm.upperArm, arm.lowerArm, _ik.target);
+  kayak.updateMatrixWorld(true);
+
+  // 前腕：肘 → 手先（実際の肘の位置から）
+  arm.lowerArm.getWorldPosition(elW);
+  _ik.target.copy(goal).sub(elW);
+  aimBone(arm.lowerArm, arm.hand, _ik.target);
+  kayak.updateMatrixWorld(true);
+
+  // 解析用：この瞬に手と握り点の距離を決めておく
+  // （target は使い回されるので、後からは測れない）
+  arm.hand.getWorldPosition(_ik.elW);
+  arm.err = _ik.elW.distanceTo(_ik.tgt);   // goal は clamp 済みなので、先に指した目標点
+}
+
+// 画面上に VRM の状態を出す（診断用デバッグ）
+function vrmHUD() {
+  let e = document.getElementById('vrmhud');
+  if (!e) {
+    e = document.createElement('div');
+    e.id = 'vrmhud';
+    e.style.cssText = 'position:fixed;left:8px;bottom:34px;z-index:9999;font:bold 11px/1.5 monospace;'
+      'color:#9fe;background:rgba(0,20,30,.88);padding:7px 10px;border-radius:7px;border:1px solid #2a6;'
+      'white-space:pre;pointer-events:none;letter-spacing:0';
+    document.body.appendChild(e);
+  }
+  return e;
+}
+
+// VRM 無しでも「いま動いているコード」を判別できるよう、ビルド番号を常に出す
+// VRM 無しならビルド番号だけ表示して消す（スコアに被せない）
+(function () {
+  const e = vrmHUD();
+  e.textContent = 'build ' + VRM_BUILD;
+  e.style.display = 'none';   // アバターが読み込めたものだけ消す
+  setTimeout(() => { if (!VRM.loaded && !VRM.loading) e.style.display = 'none'; }, 6000);
+})();
+
+// --- 上体の傾斜 ---------------------------------------------------------------
+// 漕ぎの位相から「捻り・横の傾き・前後の屈み」を作り、首と胸に分配する。
+// 首と胸はVRM 0.x / 1.0 / VRoid のどれにも必ずある。
+// 髪・服の骨は首の子（Head_2 / Head_3）なので、ここを傾ければそれらも一緒に動き、
+// スプリングボーンが「首が動いた」こととなって髪を揺らす。
+// 腰は傾けない。腰を回すと全身が 180° 返る（raw と proxy の競合）ので触らない。
+function applyVRMLean(t) {
+  const bs = VRM.leanBones;
+  if (!LEAN_ON || !bs || !bs.length) return;
+  // 漕ぎの位相。pose.yaw / pose.roll は櫂の角度で、符号は左右を含む。
+  const ly = pose.yaw * 0.22;          // 捻り（櫂に合わせて胴をねじる）
+  const lz = pose.roll * 0.16;         // 横へ倒す
+  const lx = pose.depth * 0.09;        // 前後の屈み
+  // 漕いでないときにも、わずかな重心移動で髪を揺らす
+  const idle = P.stroke ? 0.25 : 1;
+  const sy = (Math.sin(t * 0.83) * 0.020 + Math.sin(t * 1.91) * 0.007) * idle;
+  const sz = (Math.sin(t * 1.27) * 0.016) * idle;
+  const sx = (Math.sin(t * 0.61) * 0.011) * idle;
+  for (const b of bs) {
+    // 正規化ノードの rest 回転は全モデルでゼロなので、絶対値で書ける。
+    b.node.rotation.set(sx * b.w, (ly + sy) * b.w, (lz + sz) * b.w);
+  }
+}
+
+// 毎フレーム：スプリングボーネ・IK・クリッピング平面
+function updateVRM(dt, t) {
+  // 長いフレーム（タブ切替や読み込み）では計算が飛ぶので、dt を切る
+  dt = Math.min(dt, 0.05);
+  if (!VRM.loaded) return;
+  const m = VRM.model;
+  // 上体の傾斜を先に決める。ここを先にしないと、
+  // スプリングボーンが「傾いた後の首」の位置を見られない。
+  applyVRMLean(t);
+  // これを確かめないと骨の物理（髪など）が移動しない。
+  // 正式の update を先に呼ぶ。途中で骨を書き戻すので、
+  // IK はそのあとで行うのが正しい。
+  if (typeof m.update === 'function') m.update(dt);
+  else if (m.springBone) m.springBone.update(dt);
+  kayak.updateMatrixWorld(true);   // 更新を先に行う（1フレームの遅れを消す）
+
+  // --- パドルの握り点を腕に追従させる ---
+  // paddler は kayak の子で位置 0 なので、paddler 空間 == kayak 空間
+  const pd = paddler.userData;
+
+  const pq = pd.paddle.quaternion, pp = pd.paddle.position;
+  // シャフト方向（ワールド）。手の位置の計算にも使うので先に求める。
+  pd.paddle.getWorldQuaternion(_ik.qPaddle);
+  _ik.shaft.set(1, 0, 0).applyQuaternion(_ik.qPaddle).normalize();
+  // 握り点は櫂軸の上。IK は「手首」をここに置くので、
+  // 手のひらが櫂を受ける高さまで手首を持ち上げる。
+  // （そのままだと櫂が手首のあたりを貫通して「手の甲の上に櫂がある」状態になる）
+  const gripOff = (arm) => {
+    if (!arm.hand || arm.fingerIdx === undefined || !arm.handLen) return;
+    // 指方向（手首 → こぶし）を「シャフト方向 × 掌の法線」から求める。
+    // 手の向きは IK と aimHand の間で入れ替わるので、手の今の向きから求めると
+    // 帧ごとに方向がブレて手首の位置が安定しない。
+    // 手を櫂より上へ持ち上げる（掌は上向きなので、櫂はその下に来る）
+    _ik.e2.set(0, 1, 0).applyQuaternion(kayak.getWorldQuaternion(_ik.qBoat));
+    _ik.e2.addScaledVector(_ik.shaft, -_ik.e2.dot(_ik.shaft));
+    if (_ik.e2.lengthSq() < 1e-8) return;
+    _ik.e2.normalize();
+    _ik.e3.crossVectors(_ik.shaft, _ik.e2).normalize()
+      .multiplyScalar((arm.fingerSign || 1) * (arm.fingerAxisSign || 1));
+    // この逆向きに手首を引くと、こぶしが櫂に来る
+    _ik.target.addScaledVector(_ik.e2, GRIP_UP);
+    _ik.target.addScaledVector(_ik.e3, -arm.handLen * GRIP_FWD);
+  };
+  _ik.target.set( VRM.grip, 0, 0).applyQuaternion(pq).add(pp).applyMatrix4(kayak.matrixWorld);
+  gripOff(VRM.armR);
+  ikArm(VRM.armR, _ik.target, _ik.poleR.clone().applyQuaternion(kayak.quaternion));
+  _ik.target.set(-VRM.grip, 0, 0).applyQuaternion(pq).add(pp).applyMatrix4(kayak.matrixWorld);
+  gripOff(VRM.armL);
+  ikArm(VRM.armL, _ik.target, _ik.poleL.clone().applyQuaternion(kayak.quaternion));
+
+  // 手首を櫂のシャフトに合わせる（仕様で決めた軸の方向）
+  // 掌の基準方向（艇のローカル上）を更新する
+  kayak.getWorldQuaternion(_ik.qBoat);
+  _ik.e3.set(0, 1, 0).applyQuaternion(_ik.qBoat);
+  kayak.updateMatrixWorld(true);
+  if (VRM.armR.hand && VRM.armR.shaftIdx !== undefined) {
+    VRM.armR.lowerArm.getWorldPosition(_ik.t0);
+    VRM.armR.hand.getWorldPosition(_ik.t1);
+    aimHand(VRM.armR.hand, _ik.shaft, _ik.t1.sub(_ik.t0), VRM.armR.shaftIdx, VRM.armR.palmIdx);
+    kayak.updateMatrixWorld(true);
+    VRM.armL.lowerArm.getWorldPosition(_ik.t0);
+    VRM.armL.hand.getWorldPosition(_ik.t1);
+    aimHand(VRM.armL.hand, _ik.shaft, _ik.t1.sub(_ik.t0), VRM.armL.shaftIdx, VRM.armL.palmIdx);
+
+  // 指を櫂に巻き込む（前腕が引かれるので、巻き方はそれに合わせて変える）
+  curlFingers(VRM.armR, 1);
+  curlFingers(VRM.armL, 1);
+  }
+
+  // デバッグ：手と握り点の距離を測る
+  VRM.stats.tick++;
+  if (VRM.stats.tick % 6 === 0) {
+
+
+    VRM.stats.err = Math.max(VRM.armR.err || 0, VRM.armL.err || 0);
+    // 腕が伸び切る（== Tポーズ）度合いを記録する
+    const nr = VRM.armR.need / (VRM.armR.reach || 1);
+    const nl = VRM.armL.need / (VRM.armL.reach || 1);
+    VRM.stats.need = Math.max(nr, nl, VRM.stats.need * 0.985);
+
+    // --- 握り間隔の自動調整 ---
+    // 肩→握り点の距離が腕の最大到達を超えると、IK は腕をまっすぐ伸ばす
+    // （＝Tポーズのように見え、手が櫂から離れる）。
+    // need/reach のピークが RATIO_MAX を超えたら間隔を 4% ずつ詰める。
+    const RATIO_MAX = 0.82, GRIP_MIN = 0.14;
+    const ratio = Math.max(nr, nl);
+    // 過渡値（READY → PLAY で櫂がスナップする瞬など）に反応しないよう、
+    // 実行中（play）の値だけを使う
+    if (state === 'play') {
+      VRM.stats.peak = Math.max(ratio, VRM.stats.peak * 0.98);
+      // 同じもので、握り間隔の調整によって下されない「最大値」を独立で持つ。
+VRM.stats.hi = Math.max(ratio, VRM.stats.hi * 0.998);
+      if (VRM.stats.peak > RATIO_MAX && VRM.grip > GRIP_MIN) {
+        VRM.grip = Math.max(GRIP_MIN, VRM.grip * 0.96);
+        VRM.stats.peak *= 0.94;   // 改善できた分だけ差し替える
+        VRM.stats.grips++;
+      }
+      // 握り点が肩より上にあるので、まず腰を持ち上げて動く。
+      // それでも届かない場合に限り、アバターを大きくする。
+      if (VRM.stats.hi > 0.85 && VRM.stats.tick % 30 === 0) {
+        if (VRM.hipY < 0.63) {
+          VRM.hipY = Math.min(0.63, VRM.hipY + 0.006);
+          fitVRM();
+          VRM.stats.fits++;
+        } else if (VRM.scale < 1.6) {
+          VRM.scale = Math.min(1.6, VRM.scale * 1.04);
+          fitVRM();
+          VRM.stats.fits++;
+        }
+        VRM.stats.hi *= 0.97;
+      }
+    }
+    const h = vrmHUD();
+    h.textContent =
+      'build ' + VRM.build + '  f' + VRM.stats.tick + '\n' +
+      'VRM ' + (VRM.file || '(none)') + '\n' +
+      'L1 ' + VRM.armR.L1.toFixed(3) + '  L2 ' + VRM.armR.L2.toFixed(3) +
+      '  reach ' + (VRM.armR.L1 + VRM.armR.L2).toFixed(3) + '\n' +
+      'IK err ' + (VRM.stats.err * 1000).toFixed(0) + ' mm' +
+      '  need ' + VRM.stats.need.toFixed(1) + '%' +
+      '  peak ' + (VRM.stats.peak * 100).toFixed(0) + '%' +
+      '  grip ' + VRM.grip.toFixed(2) + '  hipY' + VRM.hipY.toFixed(3) + '  scale ' + VRM.scale.toFixed(2) +
+      '  n=' + VRM.stats.grips + '  fit' + VRM.stats.fits + '  hand' + VRM.armR.shaftIdx + '/' + VRM.armR.palmIdx + '/' + VRM.armR.fingerIdx + '  fing' + (VRM.armR.fingers ? VRM.armR.fingers.length : 0);
+    h.style.display = (state === 'play' || state === 'ready') ? '' : 'none';
+  }
+
+  // クリッピング平面を艇の変換に追従させる
+  const n = new THREE.Vector3(0, 1, 0).applyQuaternion(kayak.getWorldQuaternion(new THREE.Quaternion()));
+  const pt = new THREE.Vector3(0, VRM.hipY, 0).applyMatrix4(kayak.matrixWorld);
+  VRM.clip.setFromNormalAndCoplanarPoint(n, pt);
+
+  // 既存パドラーの胴・腕を隠し続ける（pose 更新が毎フレーム visible を戻すため）
+  pd.torsoPivot.visible = false;
+  pd.armL.g.visible = false;
+  pd.armR.g.visible = false;
+}
+
+buildObstacles();        // 岩と旗ゲートのコースを生成（固定 seed・毎回同じ川！）
+makeLedges();            // 段差の岩棚
+makeFalls();             // 段差の白い飛沫カーテン
+initTrees();             // 樹木（手続き生成・非同期）
+
+// ?vrm=... が指定されていればアバターを読み込む
+{
+  const saved = buildVRMUI();   // セレクト画面のアバターを選べるようにする
+  const q = new URLSearchParams(location.search).get('vrm') || saved;
+  if (q) {
+    const file = q === '1' ? 'mollymolly.vrm' : q;
+    // 同梱するモデルに限定して自動ロードする。
+    // 公開版（VRM_LIST が空）では 404 が出ないように読み込み自体を行わない。
+    if (VRM_LIST.includes(file)) {
+      const sel0 = document.getElementById('vrm-sel');
+      if (sel0) sel0.value = file;
+      loadVRM(file);            // 読み込みは非同期。プレイはブロックしない
+    }
+  }
+}
+applyDiff('normal');     // 難易度（NORMAL から開始）
+resetRun();
+renderer.setAnimationLoop(loop);
+
+// デバッグ用参照（コンソールから状態を確認できるようにしておく）
+window.__game = { scene, camera, renderer, kayak, paddler, rocks, gates, waterMesh, P, CFG, THREE, treeGroups,
+  applyDiff, get diff() { return diffKey; }, get camMode() { return camMode; }, set camMode(v) { camMode = v; },
+  VRM, loadVRM,
+  get state() { return state; }, get score() { return score; }, get info() { return { score, combo, gatesCleared, timeS, bestCombo, perfects, state, P: { ...P } }; },
+  get total() { return totalGates(); },
+  // 1フレームだけ進める（テスト用・noRender で描画を省略）
+  step(dt = 1 / 60, noRender = true) { last = performance.now() - dt * 1000; loop(performance.now(), noRender); },
+};
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+
+
+</body></html>
