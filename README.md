@@ -5,7 +5,15 @@
 ブラウザで遊べる 3D ホワイトウォーター・カヤックゲームです。
 長さ 1,500m の川を 34 個のゲートくぐりながら、下りきった先の桟橋まで進みます。
 
-![title](assets/title_hero.jpg)
+### ▶ ブラウザで今すぐプレイ
+
+**[https://molly-molly-jp.github.io/kayak3d/](https://molly-molly-jp.github.io/kayak3d/)**
+
+GitHub Pages で公開中です。インストール不要、ブラウザでそのまま遊べます。
+
+![ゲーム画面](assets/screenshot.jpg)
+
+使用アバター：RadDollV3 https://tonomaoo.booth.pm/ @三丁目の魔界
 
 ---
 
@@ -51,21 +59,11 @@ npx serve .
 
 その後 `http://localhost:8123/index.html` を開いてください。
 
-### GitHub Pages で公開する
-
-1. このフォルダ（`kayak3d/`）の中身だけをリポジトリのルートに置く
-   （`index.html` がルート直下、`assets/` と `trees.module.js` はその隣）
-2. リポジトリで **Settings → Pages → Source: Deploy from a branch**
-3. ブランチと `/ (root)` を選択
-
-**ビルド不要**です。`three.js` は CDN から importmap で読み込むため、
-そのままコミットするだけで動きます。`start-game.cmd` は Pages では不要です。
-
 | ファイル | サイズ | 役割 |
 |---|---:|---|
 | `index.html` | 95 KB / 2,054 行 | ゲーム本体（HTML + CSS + JS すべて入り） |
 | `trees.module.js` | 59 KB / 920 行 | 手続き生成ローポリ樹木ライブラリ |
-| `assets/` | — | 画像 7 枚（下記） |
+| `assets/` | — | 画像 7 枚 + ゲーム画面 1 枚（下記） |
 | `start-game.cmd` | 0.7 KB | Windows 用ランチャー（Pages では不要） |
 
 ---
@@ -213,6 +211,7 @@ kayak-river-rush/
 ├─ trees.module.js     # 手続き生成ローポリ樹木
 ├─ assets/
 │  ├─ title_hero.jpg   # タイトル背景
+│  ├─ screenshot.jpg   # README に載せるゲーム画面
 │  ├─ banner.png       # FINISH 看板
 │  ├─ banner_start.png # START 看板
 │  ├─ water_foam.jpg   # 水面の白波テクスチャ / 滝のカーテン

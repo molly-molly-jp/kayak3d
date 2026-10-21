@@ -2,6 +2,7 @@
 
 画像 7 枚はすべて **ローカルで動かした Qwen-Image-2.1** で生成しています。
 樹木は画像ではなく**コードで手続き生成**しています。
+`assets/screenshot.jpg`（README に載せるゲーム画面）のみ、ゲームのスクリーンショットです。
 
 ---
 
@@ -10,6 +11,7 @@
 | ファイル | サイズ | 用途 | 生成方式 |
 |---|---:|---|---|
 | `title_hero.jpg` | 328 KB | タイトル画面の背景 | txt2img |
+| `screenshot.jpg` | 117 KB | README のトップ画像 | ゲームのスクリーンショット |
 | `banner.png` | 720 KB | ゴールの FINISH 看板 | txt2img → PIL でトリミング |
 | `banner_start.png` | 693 KB | スタート地点の看板 | `banner.png` を編集（画像編集） |
 | `water_foam.jpg` | 364 KB | 水面の白波テクスチャ / 滝のカーテン | txt2img |
